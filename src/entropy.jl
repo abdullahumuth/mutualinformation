@@ -27,7 +27,7 @@ function GaussianMixTransformer(
     head_dim::Integer = 8, 
     layer_num::Integer = 2,
     ffn_dim::Integer = 128,
-    gaussian_num::Integer = 64)
+    gaussian_num::Integer = 32)
 
     return GaussianMixTransformer(
         Dense(1 => hidden_dim) |> gpu,
@@ -108,8 +108,8 @@ function compute_entropy(X;
     learning_rate = 1e-4,
     num_steps = 500,
     batch_size = 128,
-    test_fraction = 0.1,
-    validation_fraction = 0.1,
+    test_fraction = 0.2,
+    validation_fraction = 0.2,
     seed = 0,
     progress_bar = false)
 

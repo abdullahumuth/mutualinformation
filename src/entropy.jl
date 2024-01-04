@@ -31,7 +31,7 @@ function GaussianMixTransformer(
 
     return GaussianMixTransformer(
         Dense(1 => hidden_dim) |> gpu,
-        SinCosPositionEmbed(hidden_dim),
+        SinCosPositionEmbed(hidden_dim) |> todevice,
         Dense(hidden_dim=>3*gaussian_num) |> gpu,
         Transformer(TransformerBlock, layer_num, head_num, hidden_dim, head_dim, ffn_dim) |> todevice,
         NeuralAttentionlib.CausalMask()
@@ -60,7 +60,7 @@ end
 
 function (m::GaussianMixTransformer)(input)
     
-    x = hcat([0.0], input)
+    x = hcat(gpu([0.0]), input)
 
     h = encoder_forward(m, x[:,1:end-1])[:hidden_state]
 

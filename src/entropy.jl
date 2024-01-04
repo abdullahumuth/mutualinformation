@@ -51,16 +51,16 @@ function encoder_forward(m::GaussianMixTransformer, input)
     return t
 end
 
-function weighted_gaussian(x, weight, μ, σ)
-    return weight * exp( -0.5 * ((x - μ) / σ)^2 ) / (sqrt(2*pi*(σ^2)))
+function log_weighted_gaussian(x, weight, μ, σ)
+    return weight + ( -0.5 * ((x - μ) / σ)^2 ) - 0.5*log(2*pi*(σ^2))
 end
 
-function gaussian_mix(ps, x)
+function log_gaussian_mix(ps, x)
 
-    weights = softmax(ps[:,1,:,:])
-    gvals = weighted_gaussian.(x, weights, ps[:,2,:,:], ps[:,3,:,:])
+    log_weights = logsoftmax(ps[:,1,:,:])
+    gvals = log_weighted_gaussian.(x, log_weights, ps[:,2,:,:], ps[:,3,:,:])
     
-    return sum(gvals, dims=1)
+    return logsumexp(gvals, dims=1)
 
 end
 
@@ -77,9 +77,9 @@ function (m::GaussianMixTransformer)(input)
 
     gm_params = reshape(gm_params, (:, 3, size(input)[end-1:end]...))
     
-    probs = gaussian_mix(gm_params, input)
+    log_probs = log_gaussian_mix(gm_params, input)
 
-    return reshape(prod(probs, dims=2), (:))
+    return reshape(sum(log_probs, dims=2), (:))
 
 end
 
@@ -96,9 +96,9 @@ function (m::GaussianMixTransformer)(x, y)
 
     gm_params = reshape(gm_params, (:,3,size(x)[end-1:end]...))
 
-    probs = gaussian_mix(gm_params, x)
+    log_probs = log_gaussian_mix(gm_params, x)
     
-    return reshape(prod(probs, dims=2), (:))
+    return reshape(sum(log_probs, dims=2), (:))
 
 end
 
@@ -151,14 +151,14 @@ function compute_entropy(X;
         accumulated_loss = 0
         for (x,) in loader
             loss, grads = Flux.withgradient(model) do m
-                -sum(log.(m(x)))
+                -sum(m(x))
             end
             accumulated_loss += loss
             Flux.update!(optim, model, grads[1])
         end
         
         push!(losses, accumulated_loss / size(X_train)[end])
-        push!(test_losses, -mean(log.(model(X_test))))
+        push!(test_losses, -mean(model(X_test)))
 
         if size(test_losses)[1]>1
             if min(test_losses[1:end-1]...) > test_losses[end]
@@ -177,7 +177,7 @@ function compute_entropy(X;
     end
 
     Flux.loadparams!(model, optimal_params)
-    H_X = -mean(log.(model(X_valid)))
+    H_X = -mean(model(X_valid))
 
     return H_X, (train_losses = Float32.(losses), test_losses = Float32.(test_losses), min_epoch = min_epoch)
 
@@ -238,14 +238,14 @@ function compute_conditional_entropy(X, Y;
         accumulated_loss = 0
         for (x,y) in loader
             loss, grads = Flux.withgradient(model) do m
-                -sum(log.(m(x, y)))
+                -sum(m(x, y))
             end
             accumulated_loss += loss
             Flux.update!(optim, model, grads[1])
         end
         
         push!(losses, accumulated_loss / size(X_train)[end])
-        push!(test_losses, -mean(log.(model(X_test, Y_test))))
+        push!(test_losses, -mean(model(X_test, Y_test)))
 
         if size(test_losses)[1]>1
             if min(test_losses[1:end-1]...) > test_losses[end]
@@ -264,7 +264,7 @@ function compute_conditional_entropy(X, Y;
     end
 
     Flux.loadparams!(model, optimal_params)
-    H_XY = -mean(log.(model(X_valid, Y_valid)))
+    H_XY = -mean(model(X_valid, Y_valid))
 
     return H_XY, (train_losses = Float32.(losses), test_losses = Float32.(test_losses), min_epoch = min_epoch)
 

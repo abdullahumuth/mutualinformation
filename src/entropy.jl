@@ -51,42 +51,54 @@ function encoder_forward(m::GaussianMixTransformer, input)
     return t
 end
 
+function weighted_gaussian(x, weight, μ, σ)
+    return weight * exp( -0.5 * ((x - μ) / σ)^2 ) / (sqrt(2*pi*(σ^2)))
+end
+
 function gaussian_mix(ps, x)
-    weights = softmax(ps[:,1])
-    gvals = weights .* exp.( -0.5 * ((x .- ps[:,2]) ./ ps[:,3]).^2 ) ./ (sqrt.(2*pi*(ps[:,3].^2)))
+
+    weights = softmax(ps[:,1,:,:])
+    gvals = weighted_gaussian.(x, weights, ps[:,2,:,:], ps[:,3,:,:])
     
-    return sum(gvals)
+    return sum(gvals, dims=1)
+
 end
 
 function (m::GaussianMixTransformer)(input)
-    
-    x = hcat(gpu([0.0]), input)
 
-    h = encoder_forward(m, x[:,1:end-1])[:hidden_state]
+    input = reshape(input, (size(input)[1:2]..., :))
+    
+    # Zero padding for unconditional first probability
+    x = pad_zeros(input, (0,0,1,0,0,0))
+
+    h = encoder_forward(m, x[:,1:end-1, :])[:hidden_state]
 
     gm_params = m.final_dense(h)
 
-    gm_params = reshape(gm_params, (:,3,size(input)[end]))
+    gm_params = reshape(gm_params, (:, 3, size(input)[end-1:end]...))
     
-    probs = gaussian_mix.(eachslice(gm_params, dims=3), eachcol(input))
-    
-    return prod(probs)
+    probs = gaussian_mix(gm_params, input)
+
+    return reshape(prod(probs, dims=2), (:))
 
 end
 
 function (m::GaussianMixTransformer)(x, y)
+
+    x = reshape(x, (size(x)[1:2]..., :))
+    y = reshape(y, (size(y)[1:2]..., :))
     
-    input = hcat(y,x)
+    input = cat(y,x; dims=2)
 
     h = encoder_forward(m, input)[:hidden_state]
 
-    gm_params = m.final_dense(h)[:,size(y)[end]:end-1,:]
+    gm_params = m.final_dense(h)[:,size(y)[2]:end-1,:]
 
-    gm_params = reshape(gm_params, (:,3,size(x)[end]))
+    gm_params = reshape(gm_params, (:,3,size(x)[end-1:end]...))
+
+    probs = gaussian_mix(gm_params, x)
     
-    probs = gaussian_mix.(eachslice(gm_params, dims=3), eachcol(x))
-    
-    return prod(probs)
+    return reshape(prod(probs, dims=2), (:))
 
 end
 
@@ -112,9 +124,12 @@ function compute_entropy(X;
     # normalize to unit variance
     X = X ./ std(X, dims=2)
 
-    X_train = X[:,1:num_train]
-    X_test = X[:,num_train+1:num_train+num_test]
-    X_valid = X[:,num_train+num_test+1:end]
+    if length(size(X)) < 3
+        X = reshape(X, (1, size(X)...))
+    end
+    X_train = X[:,:,1:num_train]
+    X_test = X[:,:,num_train+1:num_train+num_test]
+    X_valid = X[:,:,num_train+num_test+1:end]
 
     # training
     model = GaussianMixTransformer()
@@ -136,14 +151,14 @@ function compute_entropy(X;
         accumulated_loss = 0
         for (x,) in loader
             loss, grads = Flux.withgradient(model) do m
-                -sum(log.(m.(transpose.(eachcol(x)))))
+                -sum(log.(m(x)))
             end
             accumulated_loss += loss
             Flux.update!(optim, model, grads[1])
         end
         
-        push!(losses, accumulated_loss / size(X_train)[2])
-        push!(test_losses, -mean(log.(model.(transpose.(eachcol(X_test))))))
+        push!(losses, accumulated_loss / size(X_train)[end])
+        push!(test_losses, -mean(log.(model(X_test))))
 
         if size(test_losses)[1]>1
             if min(test_losses[1:end-1]...) > test_losses[end]
@@ -158,7 +173,7 @@ function compute_entropy(X;
     end
 
     Flux.loadparams!(model, optimal_params)
-    H_X = -mean(log.(model.(transpose.(eachcol(X_valid)))))
+    H_X = -mean(log.(model(X_valid)))
 
     return H_X, (train_losses = losses, test_losses = test_losses, min_epoch = min_epoch)
 
@@ -185,12 +200,19 @@ function compute_conditional_entropy(X, Y;
     X = X ./ std(X, dims=2) |> gpu
     Y = Y ./ std(Y, dims=2) |> gpu
 
-    X_train = X[:,1:num_train]
-    Y_train = Y[:,1:num_train]
-    X_test = X[:,num_train+1:num_train+num_test]
-    Y_test = Y[:,num_train+1:num_train+num_test]
-    X_valid = X[:,num_train+num_test+1:end]
-    Y_valid = Y[:,num_train+num_test+1:end]
+    if length(size(X)) < 3
+        X = reshape(X, (1, size(X)...))
+    end
+    if length(size(Y)) < 3
+        Y = reshape(Y, (1, size(Y)...))
+    end
+
+    X_train = X[:,:,1:num_train]
+    Y_train = Y[:,:,1:num_train]
+    X_test = X[:,:,num_train+1:num_train+num_test]
+    Y_test = Y[:,:,num_train+1:num_train+num_test]
+    X_valid = X[:,:,num_train+num_test+1:end]
+    Y_valid = Y[:,:,num_train+num_test+1:end]
 
     # training
     model = GaussianMixTransformer()
@@ -212,14 +234,14 @@ function compute_conditional_entropy(X, Y;
         accumulated_loss = 0
         for (x,y) in loader
             loss, grads = Flux.withgradient(model) do m
-                -sum(log.(m.(transpose.(eachcol(x)), transpose.(eachcol(y)))))
+                -sum(log.(m(x, y)))
             end
             accumulated_loss += loss
             Flux.update!(optim, model, grads[1])
         end
         
-        push!(losses, accumulated_loss / size(X_train)[2])
-        push!(test_losses, -mean(log.(model.(transpose.(eachcol(X_test)), transpose.(eachcol(Y_test))))))
+        push!(losses, accumulated_loss / size(X_train)[end])
+        push!(test_losses, -mean(log.(model(X_test, Y_test))))
 
         if size(test_losses)[1]>1
             if min(test_losses[1:end-1]...) > test_losses[end]
@@ -234,7 +256,7 @@ function compute_conditional_entropy(X, Y;
     end
 
     Flux.loadparams!(model, optimal_params)
-    H_XY = -mean(log.(model.(transpose.(eachcol(X_valid)), transpose.(eachcol(Y_valid)))))
+    H_XY = -mean(log.(model(X_valid, Y_valid)))
 
     return H_XY, (train_losses = losses, test_losses = test_losses, min_epoch = min_epoch)
 

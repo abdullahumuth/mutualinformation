@@ -52,7 +52,8 @@ function encoder_forward(m::GaussianMixTransformer, input)
 end
 
 function log_weighted_gaussian(x, weight, μ, σ)
-    return weight + ( -0.5 * ((x - μ) / σ)^2 ) - 0.5*log(2*pi*(σ^2))
+    σ_sq = 1e-8+σ^2
+    return weight + ( -0.5 * (x - μ)^2 / σ_sq ) - 0.5*log(2*pi*σ_sq)
 end
 
 function log_gaussian_mix(ps, x)

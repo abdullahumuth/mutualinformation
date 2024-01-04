@@ -122,7 +122,7 @@ function compute_entropy(X;
     num_train = num_samples - num_test - num_valid
 
     # normalize to unit variance
-    X = X ./ std(X, dims=2)
+    X = X ./ std(X, dims=2) |> gpu
 
     if length(size(X)) < 3
         X = reshape(X, (1, size(X)...))
@@ -167,6 +167,10 @@ function compute_entropy(X;
             end
         end
 
+        if isnan(test_losses[end])
+            break
+        end
+
         if progress_bar
             next!(progress)
         end
@@ -175,7 +179,7 @@ function compute_entropy(X;
     Flux.loadparams!(model, optimal_params)
     H_X = -mean(log.(model(X_valid)))
 
-    return H_X, (train_losses = losses, test_losses = test_losses, min_epoch = min_epoch)
+    return H_X, (train_losses = Float32.(losses), test_losses = Float32.(test_losses), min_epoch = min_epoch)
 
 end
 
@@ -250,6 +254,10 @@ function compute_conditional_entropy(X, Y;
             end
         end
 
+        if isnan(test_losses[end])
+            break
+        end
+
         if progress_bar
             next!(progress)
         end
@@ -258,7 +266,7 @@ function compute_conditional_entropy(X, Y;
     Flux.loadparams!(model, optimal_params)
     H_XY = -mean(log.(model(X_valid, Y_valid)))
 
-    return H_XY, (train_losses = losses, test_losses = test_losses, min_epoch = min_epoch)
+    return H_XY, (train_losses = Float32.(losses), test_losses = Float32.(test_losses), min_epoch = min_epoch)
 
 end
 

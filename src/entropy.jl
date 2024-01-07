@@ -6,11 +6,25 @@ export compute_entropy,
 using Random
 using Statistics
 using Flux
+using Flux.Functors
 using Transformers
 using Transformers.Layers
 using Transformers.TextEncoders
 using NeuralAttentionlib
 using ProgressMeter
+
+import Base.+
+import Base.-
+function +(x::Nothing, y::Nothing)
+    return nothing
+end
+function -(x::Nothing, y::Nothing)
+    return nothing
+end
+import Base.*
+function *(x, y::Nothing)
+    return nothing
+end
 
 
 struct GaussianMixTransformer{P <: Transformers.Layers.AbstractEmbedding, T <: Transformers.Layers.Transformer, A}
@@ -191,7 +205,8 @@ function compute_conditional_entropy(X, Y;
     test_fraction = 0.1,
     validation_fraction = 0.1,
     seed = 0,
-    progress_bar = false)
+    progress_bar = false,
+    svrg_interval = -1)
 
     Random.seed!(seed)
 
@@ -222,6 +237,11 @@ function compute_conditional_entropy(X, Y;
     # training
     model = GaussianMixTransformer()
     optimal_params = deepcopy(Flux.params(model))
+    if svrg_interval > 0
+        svrg_params = deepcopy(Flux.params(model))
+        svrg_mean_grads = fmap(x->0.0*x, Flux.withgradient((m)->sum(m(X[:,:,1],Y[:,:,1])), model)[2])
+        accumulated_grads = fmap(x->0.0*x, svrg_mean_grads)
+    end
 
     optim = Flux.setup(Flux.Adam(learning_rate), model)
     loader = Flux.DataLoader((X_train, Y_train), batchsize=batch_size, shuffle=true);
@@ -237,12 +257,41 @@ function compute_conditional_entropy(X, Y;
     end
     for epoch in epochs
         accumulated_loss = 0
+        tmp_params = nothing
+        num_batches = 0
         for (x,y) in loader
+            num_batches += 1
             loss, grads = Flux.withgradient(model) do m
                 -sum(m(x, y))
             end
+
+            if svrg_interval > 0 && epoch > svrg_interval
+                if mod(epoch-1, svrg_interval) == 0
+                    accumulated_grads = fmap(+, accumulated_grads, grads)
+                end
+                tmp_params = deepcopy(Flux.params(model))
+
+                if epoch > svrg_interval+1
+                    Flux.loadparams!(model, svrg_params)
+                    _, svrg_grads = Flux.withgradient(model) do m
+                        -sum(m(x, y))
+                    end
+                    Flux.loadparams!(model, tmp_params)
+
+                    grads = fmap(-, grads, svrg_grads)
+                    grads = fmap(+, grads, svrg_mean_grads)
+                end
+            end
+
             accumulated_loss += loss
             Flux.update!(optim, model, grads[1])
+        end
+        if svrg_interval > 0
+            if mod(epoch-1, svrg_interval) == 0
+                svrg_mean_grads = fmap(x-> (1.0/num_batches) * x, accumulated_grads)
+                svrg_params = deepcopy(tmp_params)
+                accumulated_grads = fmap(x-> 0.0 * x, accumulated_grads)
+            end
         end
         
         push!(losses, accumulated_loss / size(X_train)[end])

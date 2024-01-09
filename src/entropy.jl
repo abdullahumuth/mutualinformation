@@ -206,7 +206,7 @@ function compute_conditional_entropy(X, Y;
     validation_fraction = 0.1,
     seed = 0,
     progress_bar = false,
-    svrg_interval = -1)
+    svrg_interval = -1, svrg_start=0)
 
     Random.seed!(seed)
 
@@ -241,6 +241,7 @@ function compute_conditional_entropy(X, Y;
         svrg_params = deepcopy(Flux.params(model))
         svrg_mean_grads = fmap(x->0.0*x, Flux.withgradient((m)->sum(m(X[:,:,1],Y[:,:,1])), model)[2])
         accumulated_grads = fmap(x->0.0*x, svrg_mean_grads)
+        svrg_start = max(svrg_interval, svrg_start)
     end
 
     optim = Flux.setup(Flux.Adam(learning_rate), model)
@@ -265,13 +266,13 @@ function compute_conditional_entropy(X, Y;
                 -sum(m(x, y))
             end
 
-            if svrg_interval > 0 && epoch > svrg_interval
-                if mod(epoch-1, svrg_interval) == 0
+            if svrg_interval > 0 && epoch > svrg_start
+                if mod(epoch-1, svrg_interval) == 0 || epoch-1 == svrg_start
                     accumulated_grads = fmap(+, accumulated_grads, grads)
                 end
                 tmp_params = deepcopy(Flux.params(model))
 
-                if epoch > svrg_interval+1
+                if epoch > svrg_start + 1
                     Flux.loadparams!(model, svrg_params)
                     _, svrg_grads = Flux.withgradient(model) do m
                         -sum(m(x, y))
@@ -286,8 +287,8 @@ function compute_conditional_entropy(X, Y;
             accumulated_loss += loss
             Flux.update!(optim, model, grads[1])
         end
-        if svrg_interval > 0
-            if mod(epoch-1, svrg_interval) == 0
+        if svrg_interval > 0 && epoch > svrg_start
+            if mod(epoch-1, svrg_interval) == 0 || epoch-1 == svrg_start
                 svrg_mean_grads = fmap(x-> (1.0/num_batches) * x, accumulated_grads)
                 svrg_params = deepcopy(tmp_params)
                 accumulated_grads = fmap(x-> 0.0 * x, accumulated_grads)

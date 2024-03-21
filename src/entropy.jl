@@ -206,7 +206,8 @@ function compute_conditional_entropy(X, Y;
     validation_fraction = 0.1,
     seed = 0,
     progress_bar = false,
-    svrg_interval = -1, svrg_start=0)
+    svrg_interval = -1, svrg_start=0,
+    auto_stop = true)
 
     Random.seed!(seed)
 
@@ -303,10 +304,10 @@ function compute_conditional_entropy(X, Y;
                 optimal_params = deepcopy(Flux.params(model))
                 min_epoch = epoch
             end
-        end
 
-        if isnan(test_losses[end])
-            break
+            if auto_stop && max(losses[end-min(100, size(losses)[1]-1):end]...) < min(test_losses...)
+                break
+            end
         end
 
         if progress_bar
@@ -317,7 +318,7 @@ function compute_conditional_entropy(X, Y;
     Flux.loadparams!(model, optimal_params)
     H_XY = -mean(model(X_valid, Y_valid))
 
-    return H_XY, (train_losses = Float32.(losses), test_losses = Float32.(test_losses), min_epoch = min_epoch)
+    return H_XY, (train_losses = Float32.(losses), test_losses = Float32.(test_losses), min_epoch = min_epoch, net=model)
 
 end
 

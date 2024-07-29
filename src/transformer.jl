@@ -9,48 +9,44 @@ using NeuralAttentionlib
 using ProgressMeter
 import CUDA
 
-struct GeneralTransformer{P <: Transformers.Layers.AbstractEmbedding, 
-                                  T <: Transformers.Layers.Transformer}
+padding_constant = 0
+
+struct GeneralTransformer{P <: Transformers.Layers.AbstractEmbedding}
     general_embed::Dense
     pos_embed::P
     final_dense::Dense
-    decoder::T
-    encoder::Union{Nothing, T}
+    decoder::Transformers.Layers.Transformer
+    encoder::Union{Nothing, Transformers.Layers.Transformer}
     attention_mask
 end
 
-function GeneralTransformer(
-    hidden_dim::Integer = 64, 
+function GeneralTransformer(;
+    embedding_dim::Integer = 64, 
     head_num::Integer = 4, 
     head_dim::Integer = 8, 
     layer_num::Integer = 2,
     ffn_dim::Integer = 128,
     conditional::Bool = false)
-    
-
     if conditional
-        return GeneralTransformer(
-        Dense(1 => hidden_dim) |> gpu,
-        SinCosPositionEmbed(hidden_dim) |> todevice,
-        Dense(hidden_dim=>1, sigmoid) |> gpu,
-        Transformer(PreNormTransformerDecoderBlock, layer_num, head_num, hidden_dim, head_dim, ffn_dim) |> todevice,
-        Transformer(PreNormTransformerBlock, layer_num, head_num, hidden_dim, head_dim, ffn_dim) |> todevice,
-        NeuralAttentionlib.CausalMask())
-
+        decoder = Transformer(PreNormTransformerDecoderBlock, layer_num, head_num, embedding_dim, head_dim, ffn_dim)
+        encoder = Transformer(PreNormTransformerBlock, layer_num, head_num, embedding_dim, head_dim, ffn_dim)
     else
-        return GeneralTransformer(
-        Dense(1 => hidden_dim) |> gpu,
-        SinCosPositionEmbed(hidden_dim) |> todevice,
-        Dense(hidden_dim=>1, sigmoid) |> gpu,
-        Transformer(PreNormTransformerBlock, layer_num, head_num, hidden_dim, head_dim, ffn_dim) |> todevice,
-        nothing,
-        NeuralAttentionlib.CausalMask())
+        decoder = Transformer(PreNormTransformerBlock, layer_num, head_num, embedding_dim, head_dim, ffn_dim)
+        encoder = nothing
     end
+
+    return GeneralTransformer(
+        Dense(1 => embedding_dim) |> todevice,
+        SinCosPositionEmbed(embedding_dim) |> todevice,
+        Dense(embedding_dim=>1, sigmoid) |> todevice,
+        decoder |> todevice,
+        encoder |> todevice,
+        NeuralAttentionlib.CausalMask())
 end
 
 
 function embedding(m::GeneralTransformer, x)
-    x = reshape(x, (1, size(x)...))
+    x = reshape(x, (1, size(x)...)) |> todevice
     we = m.general_embed(x)
     pe = m.pos_embed(we)
     return we .+ pe
@@ -71,6 +67,7 @@ end
 function decoder_forward(m::GeneralTransformer, input)
     e = embedding(m, input)
     t = m.decoder(e, m.attention_mask)
+    #println("shape of hidden state: ", size(t.hidden_state))
     return t.hidden_state
 end
 
@@ -81,10 +78,14 @@ end
 # then we calculate the cross entropy (I just want to calculate p(x), that's why I choose h when x = 1 and 1-h when x = 0)
 # we will need the sum of the logarithms of the probabilities, that would be the -log likelihood.
 function (m::GeneralTransformer)(x)
-    padded_x = pad_constant(x, (1,0,0,0), -1)
+    #println("shape of x: ", size(x))
+    padded_x = pad_constant(x, (1,0,0,0), padding_constant) # reconsider inputs as 1 and -1 and padding with 0
     h = decoder_forward(m, padded_x)
     h = m.final_dense(h)
-    h = h[1:end-1,:]
+    #println("shape after the final dense h: ", size(h))
+    h = h[:,1:end-1,:]
+    h = reshape(h, (size(h)[2:3]...))
+    #println("shape of h: ", size(h))
     h = h.*x + (1 .- h).*(1 .- x)
     h = log2.(h)
     h = -sum(h, dims=1)
@@ -94,12 +95,13 @@ end
 
 #conditional probability
 function (m::GeneralTransformer)(x, y)
-    padded_x = pad_constant(x, (1,0,0,0), -1)
-    h = cross_attend(m, padded_x, m.encoder_forward(y))
+    padded_x = pad_constant(x, (1,0,0,0), padding_constant)
+    h = cross_attend(m, padded_x, encoder_forward(m,y))
     h = m.final_dense(h)
-    h = h[1:end-1,:]
+    h = h[:,1:end-1,:]
+    h = reshape(h, (size(h)[2:3]...))
     h = h.*x + (1 .- h).*(1 .- x)
-    h = log2.(h)
+    h = log2.(h) # I thought about 1 and 0's but input is 1 and -1, FIX!
     h = -sum(h, dims=1)
     return h
 end

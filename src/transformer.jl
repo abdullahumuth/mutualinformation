@@ -86,7 +86,7 @@ function (m::GeneralTransformer)(x)
     h = h[:,1:end-1,:]
     h = reshape(h, (size(h)[2:3]...))
     #println("shape of h: ", size(h))
-    h = h.*x + (1 .- h).*(1 .- x)
+    h = h.*(x .== 1) + (1 .- h).*(x .== 0)
     h = log2.(h)
     h = -sum(h, dims=1)
     return h
@@ -100,7 +100,7 @@ function (m::GeneralTransformer)(x, y)
     h = m.final_dense(h)
     h = h[:,1:end-1,:]
     h = reshape(h, (size(h)[2:3]...))
-    h = h.*x + (1 .- h).*(1 .- x)
+    h = h.*(x .== 1) + (1 .- h).*(x .== 0)
     h = log2.(h) # I thought about 1 and 0's but input is 1 and -1, FIX!
     h = -sum(h, dims=1)
     return h

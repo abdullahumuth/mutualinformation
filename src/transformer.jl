@@ -52,8 +52,9 @@ function embedding(m::GeneralTransformer, x)
     return we .+ pe
 end
 
-function encoder_forward(m::GeneralTransformer, input)
-    e = embedding(m, input)
+function encoder_forward(m::GeneralTransformer, y)
+    y = reshape(y, (1, size(y)...)) |> todevice
+    e = embedding(m, y)
     t = m.encoder(e, nothing)
     return t.hidden_state
 end
@@ -79,14 +80,14 @@ end
 # we will need the sum of the logarithms of the probabilities, that would be the -log likelihood.
 function (m::GeneralTransformer)(x)
     #println("shape of x: ", size(x))
-    padded_x = pad_constant(x, (1,0,0,0), padding_constant) # reconsider inputs as 1 and -1 and padding with 0
+    padded_x = pad_constant(x, (1,0,0,0), padding_constant) 
     h = decoder_forward(m, padded_x)
     h = m.final_dense(h)
     #println("shape after the final dense h: ", size(h))
     h = h[:,1:end-1,:]
     h = reshape(h, (size(h)[2:3]...))
     #println("shape of h: ", size(h))
-    h = h.*(x .== 1) + (1 .- h).*(x .== 0)
+    h = h.*(x .== 1) + (1 .- h).*(x .== -1)
     h = log2.(h)
     h = -sum(h, dims=1)
     return h
@@ -95,13 +96,15 @@ end
 
 #conditional probability
 function (m::GeneralTransformer)(x, y)
+    
     padded_x = pad_constant(x, (1,0,0,0), padding_constant)
-    h = cross_attend(m, padded_x, encoder_forward(m,y))
+    encoded = encoder_forward(m,y)
+    h = cross_attend(m, padded_x, encoded)
     h = m.final_dense(h)
     h = h[:,1:end-1,:]
     h = reshape(h, (size(h)[2:3]...))
-    h = h.*(x .== 1) + (1 .- h).*(x .== 0)
-    h = log2.(h) # I thought about 1 and 0's but input is 1 and -1, FIX!
+    h = h.*(x .== 1) + (1 .- h).*(x .== -1)
+    h = log2.(h) 
     h = -sum(h, dims=1)
     return h
 end
@@ -157,11 +160,12 @@ function compute_entropy(model, X;
         end
         
         push!(losses, accumulated_loss / size(X_train)[end])
-        push!(test_losses, -mean(model(X_test)))
+        push!(test_losses, mean(model(X_test)))
 
         if size(test_losses)[1]>1
             if min(test_losses[1:end-1]...) > test_losses[end]
                 optimal_params = deepcopy(Flux.params(model))
+                println("Minimum achieved at epoch ", epoch)
                 min_epoch = epoch
             end
         end
@@ -176,8 +180,7 @@ function compute_entropy(model, X;
     end
 
     Flux.loadparams!(model, optimal_params)
-    H_X = -mean(model(X_valid))
-
+    H_X = mean(model(X_valid))
     return H_X, (train_losses = Float32.(losses), test_losses = Float32.(test_losses), min_epoch = min_epoch)
 
 end
@@ -190,7 +193,6 @@ function compute_conditional_entropy(model, X, Y;
     validation_fraction = 0.1,
     seed = 0,
     progress_bar = false,
-    svrg_interval = -1, svrg_start=0,
     auto_stop = true)
 
     Random.seed!(seed)
@@ -202,7 +204,6 @@ function compute_conditional_entropy(model, X, Y;
     num_train = num_samples - num_test - num_valid
 
     # normalize to unit variance
-    Y = Y ./ std(Y, dims=2) |> gpu
 
     X_train = X[:,1:num_train]
     X_test = X[:,num_train+1:num_train+num_test]
@@ -215,12 +216,6 @@ function compute_conditional_entropy(model, X, Y;
 
     # training
     optimal_params = deepcopy(Flux.params(model))
-    if svrg_interval > 0
-        svrg_params = deepcopy(Flux.params(model))
-        svrg_mean_grads = fmap(x->0.0*x, Flux.withgradient((m)->sum(m(X[:,1],Y[:,1])), model)[2])
-        accumulated_grads = fmap(x->0.0*x, svrg_mean_grads)
-        svrg_start = max(svrg_interval, svrg_start)
-    end
 
     optim = Flux.setup(Flux.Adam(learning_rate), model)
     loader = Flux.DataLoader((X_train, Y_train), batchsize=batch_size, shuffle=true);
@@ -241,44 +236,20 @@ function compute_conditional_entropy(model, X, Y;
         for (x,y) in loader
             num_batches += 1
             loss, grads = Flux.withgradient(model) do m
-                -sum(m(x, y))
-            end
-
-            if svrg_interval > 0 && epoch > svrg_start
-                if mod(epoch-1, svrg_interval) == 0 || epoch-1 == svrg_start
-                    accumulated_grads = fmap(+, accumulated_grads, grads)
-                end
-                tmp_params = deepcopy(Flux.params(model))
-
-                if epoch > svrg_start + 1
-                    Flux.loadparams!(model, svrg_params)
-                    _, svrg_grads = Flux.withgradient(model) do m
-                        -sum(m(x, y))
-                    end
-                    Flux.loadparams!(model, tmp_params)
-
-                    grads = fmap(-, grads, svrg_grads)
-                    grads = fmap(+, grads, svrg_mean_grads)
-                end
+                sum(m(x, y))
             end
 
             accumulated_loss += loss
             Flux.update!(optim, model, grads[1])
         end
-        if svrg_interval > 0 && epoch > svrg_start
-            if mod(epoch-1, svrg_interval) == 0 || epoch-1 == svrg_start
-                svrg_mean_grads = fmap(x-> (1.0/num_batches) * x, accumulated_grads)
-                svrg_params = deepcopy(tmp_params)
-                accumulated_grads = fmap(x-> 0.0 * x, accumulated_grads)
-            end
-        end
         
         push!(losses, accumulated_loss / size(X_train)[end])
-        push!(test_losses, -mean(model(X_test, Y_test)))
+        push!(test_losses, mean(model(X_test, Y_test)))
 
         if size(test_losses)[1]>1
             if min(test_losses[1:end-1]...) > test_losses[end]
                 optimal_params = deepcopy(Flux.params(model))
+                println("Minimum achieved at epoch ", epoch)
                 min_epoch = epoch
             end
 
@@ -293,7 +264,8 @@ function compute_conditional_entropy(model, X, Y;
     end
 
     Flux.loadparams!(model, optimal_params)
-    H_XY = -mean(model(X_valid, Y_valid))
+
+    H_XY = mean(model(X_valid, Y_valid))
 
     return H_XY, (train_losses = Float32.(losses), test_losses = Float32.(test_losses), min_epoch = min_epoch, net=model)
 

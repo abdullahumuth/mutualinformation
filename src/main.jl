@@ -8,13 +8,13 @@ L = 12
 J = -1
 
 g = -1.0 # can be anything from [-0.5,-1.0,-2.0]
-t = 1.0   # can be anything from collect(0:0.001:1)
+t = 0.1   # can be anything from collect(0:0.001:1)
 
 # this creates the spin basis in the same convention as used by the wavefunction
 # spin_basis = vec(collect(Iterators.product(fill([1,0],L)...)));
 
 psi = read_wavefunction(L, J, g, t)
-num_samples = 1000
+num_samples = 10000
 
 #x = rand([0,1], (4, 20)) |> todevice
 #y = 2 .* rand(Float32, (2, 20)) .- 1 |> todevice
@@ -27,7 +27,7 @@ psi_vectorized = cat(transpose(real(psi)), transpose(imag(psi)), dims = 1) |> to
 
 y = mapslices(x, dims = 1) do xi
     index = parse(Int, join(string.(Int.(xi .== 1))), base=2)
-    return psi_vectorized[:,index+1]
+    return Float32.(psi_vectorized[:,index+1])
     end
 
 display(y)
@@ -60,6 +60,5 @@ println("Mutual Information: " * string(a[1] - b[1]))
 p2 = plot(b[2].train_losses, label="train")
 plot!(b[2].test_losses, label="test")
 
-display(plot(p))
-display(plot(p2))
+display(plot(p,p2, layout = (2,1)))
 

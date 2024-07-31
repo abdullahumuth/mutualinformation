@@ -12,7 +12,8 @@ import CUDA
 padding_constant = 0
 
 struct GeneralTransformer{P <: Transformers.Layers.AbstractEmbedding}
-    general_embed::Dense
+    spin_embed::Dense
+    psi_embed::Union{Nothing, Dense}
     pos_embed::P
     final_dense::Dense
     decoder::Transformers.Layers.Transformer
@@ -28,15 +29,18 @@ function GeneralTransformer(;
     ffn_dim::Integer = 128,
     conditional::Bool = false)
     if conditional
+        psi_embed = Dense(1 => embedding_dim) |> todevice
         decoder = Transformer(PreNormTransformerDecoderBlock, layer_num, head_num, embedding_dim, head_dim, ffn_dim)
         encoder = Transformer(PreNormTransformerBlock, layer_num, head_num, embedding_dim, head_dim, ffn_dim)
     else
+        psi_embed = nothing
         decoder = Transformer(PreNormTransformerBlock, layer_num, head_num, embedding_dim, head_dim, ffn_dim)
         encoder = nothing
     end
 
     return GeneralTransformer(
         Dense(1 => embedding_dim) |> todevice,
+        psi_embed,
         SinCosPositionEmbed(embedding_dim) |> todevice,
         Dense(embedding_dim=>1, sigmoid) |> todevice,
         decoder |> todevice,
@@ -45,16 +49,20 @@ function GeneralTransformer(;
 end
 
 
-function embedding(m::GeneralTransformer, x)
+function embedding(m::GeneralTransformer, x; encoder=false)
     x = reshape(x, (1, size(x)...)) |> todevice
-    we = m.general_embed(x)
+    if encoder
+        we = m.psi_embed(x)
+    else
+        we = m.spin_embed(x)
+    end
     pe = m.pos_embed(we)
     return we .+ pe
 end
 
 function encoder_forward(m::GeneralTransformer, y)
     y = reshape(y, (1, size(y)...)) |> todevice
-    e = embedding(m, y)
+    e = embedding(m, y, encoder = true)
     t = m.encoder(e, nothing)
     return t.hidden_state
 end

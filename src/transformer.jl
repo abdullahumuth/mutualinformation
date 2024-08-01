@@ -119,81 +119,7 @@ end
 
 Flux.@functor GeneralTransformer
 
-
-function compute_entropy(model, X;
-    learning_rate = 1e-4,
-    num_steps = 500,
-    batch_size = 128,
-    test_fraction = 0.2,
-    validation_fraction = 0.2,
-    seed = 0,
-    progress_bar = false)
-
-    Random.seed!(seed)
-
-    # organize data
-    num_samples = size(X)[2]
-    num_test = Int(floor(test_fraction * num_samples))
-    num_valid = Int(floor(validation_fraction * num_samples))
-    num_train = num_samples - num_test - num_valid
-
-
-    X_train = X[:,1:num_train]
-    X_test = X[:,num_train+1:num_train+num_test]
-    X_valid = X[:,num_train+num_test+1:end]
-
-    # training
-    optimal_params = deepcopy(Flux.params(model))
-
-    optim = Flux.setup(Flux.Adam(learning_rate), model)
-    loader = Flux.DataLoader((X_train,), batchsize=batch_size, shuffle=true);
-
-    losses = []
-    test_losses = []
-    min_epoch = 0
-
-    epochs = 1:num_steps
-    progress = nothing
-    if progress_bar
-        progress = Progress(num_steps; dt=1.0)
-    end
-    for epoch in epochs
-        accumulated_loss = 0
-        for (x,) in loader
-            loss, grads = Flux.withgradient(model) do m
-                sum(m(x))
-            end
-            accumulated_loss += loss
-            Flux.update!(optim, model, grads[1])
-        end
-        
-        push!(losses, accumulated_loss / size(X_train)[end])
-        push!(test_losses, mean(model(X_test)))
-
-        if size(test_losses)[1]>1
-            if min(test_losses[1:end-1]...) > test_losses[end]
-                optimal_params = deepcopy(Flux.params(model))
-                println("Minimum achieved at epoch ", epoch)
-                min_epoch = epoch
-            end
-        end
-
-        if isnan(test_losses[end])
-            break
-        end
-
-        if progress_bar
-            next!(progress)
-        end
-    end
-
-    Flux.loadparams!(model, optimal_params)
-    H_X = mean(model(X_valid))
-    return H_X, (train_losses = Float32.(losses), test_losses = Float32.(test_losses), min_epoch = min_epoch)
-
-end
-
-function compute_conditional_entropy(model, X, Y;
+function train(model, input...;
     learning_rate = 1e-4,
     num_steps = 500,
     batch_size = 128,
@@ -206,27 +132,30 @@ function compute_conditional_entropy(model, X, Y;
     Random.seed!(seed)
 
     # organize data
-    num_samples = size(X)[2]
+
+    num_samples = size(input[1])[2]
     num_test = Int(floor(test_fraction * num_samples))
     num_valid = Int(floor(validation_fraction * num_samples))
     num_train = num_samples - num_test - num_valid
 
-    # normalize to unit variance
-
-    X_train = X[:,1:num_train]
-    X_test = X[:,num_train+1:num_train+num_test]
-    X_valid = X[:,num_train+num_test+1:end]
-
-    Y_train = Y[:,1:num_train]
-    Y_test = Y[:,num_train+1:num_train+num_test]
-    Y_valid = Y[:,num_train+num_test+1:end]
-
+    
+    if length(input) == 2
+        X, Y = input
+        train_input = X[:,1:num_train] , Y[:,1:num_train]
+        test_input = X[:,num_train+1:num_train+num_test], Y[:,num_train+1:num_train+num_test]
+        validation_input = X[:,num_train+num_test+1:end], Y[:,num_train+num_test+1:end]
+    else
+        X = input[1]
+        train_input = (X[:,1:num_train],)
+        test_input = (X[:,num_train+1:num_train+num_test],)
+        validation_input = (X[:,num_train+num_test+1:end],)
+    end
 
     # training
     optimal_params = deepcopy(Flux.params(model))
 
     optim = Flux.setup(Flux.Adam(learning_rate), model)
-    loader = Flux.DataLoader((X_train, Y_train), batchsize=batch_size, shuffle=true);
+    loader = Flux.DataLoader(train_input, batchsize=batch_size, shuffle=true);
 
     losses = []
     test_losses = []
@@ -239,20 +168,17 @@ function compute_conditional_entropy(model, X, Y;
     end
     for epoch in epochs
         accumulated_loss = 0
-        tmp_params = nothing
-        num_batches = 0
-        for (x,y) in loader
-            num_batches += 1
+        for inp in loader
             loss, grads = Flux.withgradient(model) do m
-                sum(m(x, y))
+                sum(m(inp...))
             end
 
             accumulated_loss += loss
             Flux.update!(optim, model, grads[1])
         end
         
-        push!(losses, accumulated_loss / size(X_train)[end])
-        push!(test_losses, mean(model(X_test, Y_test)))
+        push!(losses, accumulated_loss / size(train_input[1])[end])
+        push!(test_losses, mean(model(test_input...)))
 
         if size(test_losses)[1]>1
             if min(test_losses[1:end-1]...) > test_losses[end]
@@ -273,9 +199,10 @@ function compute_conditional_entropy(model, X, Y;
 
     Flux.loadparams!(model, optimal_params)
 
-    H_XY = mean(model(X_valid, Y_valid))
+    output = mean(model(validation_input...))
 
-    return H_XY, (train_losses = Float32.(losses), test_losses = Float32.(test_losses), min_epoch = min_epoch, net=model)
+    return output, (train_losses = Float32.(losses), test_losses = Float32.(test_losses), min_epoch = min_epoch, net=model)
 
-end
+end 
+
 

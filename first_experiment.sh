@@ -8,5 +8,5 @@
 #SBATCH --mem=32G
 #SBATCH --gres=gpu:a100:3
 
-srun julia src/main.jl
+srun julia ./src/main.jl
 

@@ -183,7 +183,6 @@ function train(model, input...;
         if size(test_losses)[1]>1
             if min(test_losses[1:end-1]...) > test_losses[end]
                 optimal_params = deepcopy(Flux.params(model))
-                println("Minimum achieved at epoch ", epoch)
                 min_epoch = epoch
             end
 

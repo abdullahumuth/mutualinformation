@@ -2,13 +2,11 @@ using DataFrames, HDF5
 using LinearAlgebra
 
 function read_wavefunction(L, J, g, t)
-  # path to the wavefunction files
-  cd("..")
-  cd("..")
-  path = "./inputs/" 
+  path = "data/inputs/" 
   name = path * "psi_L=$(L).h5"
 
   file = h5open(name, "r")
   psi  = read(file, "J=$(J)_g=$(g)/t=$(t)")
+  close(file)
   return psi
 end

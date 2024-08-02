@@ -1,7 +1,8 @@
 include("./transformer.jl")
 include("./gen_samples.jl")
 include("./read_wvfct.jl")
-using Pkg, Pkg.activate(".")
+using Pkg 
+Pkg.activate(".")
 using Plots
 using BSON
 using CSV
@@ -14,9 +15,10 @@ struct experiment
     g::AbstractRange{}
     t::AbstractRange{}
     num_samples::AbstractRange{}
+    new::Bool
 end
 
-function experiment(name, version, L, J, g, t, num_samples)
+function experiment(name, version, L, J, g, t, num_samples; new = false)
     if typeof(L) == Int
         L = L:1:L
     end
@@ -33,27 +35,24 @@ function experiment(name, version, L, J, g, t, num_samples)
         t = t:1.0:t
     end
     name = "$(name)_v$(version)"
-    return experiment(name, L, J, g, t, num_samples)
+    return experiment(name, L, J, g, t, num_samples, new)
+end
+
+function mkdir_safe(path)
+    try mkdir(path) catch e @warn "Probably file already exists: " * e.msg end
 end
 
 function (exp::experiment)()
-    last_pwd = pwd()
-    try
-        mkdir("./data/outputs/$(e.name)")
-    catch e
-        println("Failed to create directory: ", e)
-    end
-
-    try
-        cd("./data/outputs/$(e.name)")
-    catch e
-        println("Failed to change directory: ", e)
-    end
+    mkdir_safe("data/outputs/$(exp.name)")
+    mkdir_safe("data/outputs/$(exp.name)/models")
+    mkdir_safe("data/outputs/$(exp.name)/losses")
+    mkdir_safe("data/outputs/$(exp.name)/plots")
+    mkdir_safe("data/outputs/$(exp.name)/results")
 
     for L in exp.L, J in exp.J, g in exp.g, t in exp.t, num_samples in exp.num_samples
         c = exp.name, L, J, g, t, num_samples
     try
-        entropy, conditional_entropy = mutualinformation(c[2:end]...)   
+        entropy, conditional_entropy = mutualinformation(c[2:end]..., new = exp.new)
         try
             save_models(entropy, conditional_entropy, c...)
         catch e
@@ -71,13 +70,13 @@ function (exp::experiment)()
         end
     catch e
         @warn "Failed to compute mutual information: " * e.msg
-        end
     end
-    cd(last_pwd)
+
+    end
 end
 
 
-function mutualinformation(L, J, g, t, num_samples)
+function mutualinformation(L, J, g, t, num_samples; new = false)
     psi = read_wavefunction(L, J, g, t)
     x = stack(gen_samples(psi, num_samples, L), dims = 2) |> todevice
     psi_vectorized = cat(transpose(real(psi)), transpose(imag(psi)), dims = 1) |> todevice
@@ -86,18 +85,20 @@ function mutualinformation(L, J, g, t, num_samples)
         return Float32.(psi_vectorized[:,index+1])
     end
     model = GeneralTransformer()
-    a = train(model, x; progress_bar=true, auto_stop=false)
+    a = train(model, x; progress_bar=false, auto_stop=false)
     conditional_model = GeneralTransformer(conditional=true)
-    b = train(conditional_model, x, y; progress_bar=true, auto_stop=false) 
+    if new
+        first_mha = deepcopy(Flux.params(model.decoder.blocks.:(1).attention))
+        Flux.loadparams!(conditional_model.decoder.blocks.:(1).attention, first_mha)
+    end
+    b = train(conditional_model, x, y; progress_bar=false, auto_stop=false) 
     return a, b
 end
 
 function plot_models(a, b)
-    p = plot(a[2].train_losses, label="train", title="Entropy= $(a[1])")
+    p = plot(a[2].train_losses, label="train", title="Entropy= $(a[1])  (min. $(a[2].min_epoch))")
     plot!(a[2].test_losses, label="test")
-    annotate!(a[2].min_epoch, a[2].test_losses[a[2].min_epoch], text("Minimum at $(a[2].min_epoch)", 12, :left))
-    p2 = plot(b[2].train_losses, label="train", title="Conditional Entropy= $(b[1])")
-    annotate!(b[2].min_epoch, b[2].test_losses[b[2].min_epoch], text("Minimum at $(b[2].min_epoch)", 12, :left))
+    p2 = plot(b[2].train_losses, label="train", title="Conditional Entropy= $(b[1])  (min. $(b[2].min_epoch))")
     plot!(b[2].test_losses, label="test")
     return plot(p,p2, layout = (2,1))
 end
@@ -110,21 +111,21 @@ function save_models(a,b,c...)
     let 
         entropy_model = cpu(a[2].net)
         conditional_entropy_model = cpu(b[2].net)
-        bson("model_" * name_files(c...) * ".bson", entropy = entropy_model, conditional_entropy = conditional_entropy_model)
+        bson("data/outputs/$(c[1])/models/" * name_files(c...) * ".bson", entropy = entropy_model, conditional_entropy = conditional_entropy_model)
     end
 end
 
 function output_csv(a,b,c...)
     result = DataFrame(mutual_information = a[1]-b[1], entropy = a[1], conditional_entropy = b[1])
-    CSV.write("result_" * name_files(c...) * ".csv", result)
+    CSV.write("data/outputs/$(c[1])/results/" * name_files(c...) * ".csv", result)
     entropy_loss = DataFrame(epoch = 1:length(a[2].train_losses), train = a[2].train_losses, test = a[2].test_losses)
-    CSV.write("entropy_loss_" * name_files(c...) * ".csv", entropy_loss)
+    CSV.write("data/outputs/$(c[1])/losses/entropy_" * name_files(c...) * ".csv", entropy_loss)
     conditional_entropy_loss = DataFrame(epoch = 1:length(b[2].train_losses), train = b[2].train_losses, test = b[2].test_losses)
-    CSV.write("conditional_entropy_loss_" * name_files(c...) * ".csv", conditional_entropy_loss)
+    CSV.write("data/outputs/$(c[1])/losses/conditional_entropy_" * name_files(c...) * ".csv", conditional_entropy_loss)
 end
 
 function save_plots(a,b,c...)
-    savefig(plot_models(a,b), "plot_" * name_files(c...) * ".png")
+    savefig(plot_models(a,b), "data/outputs/$(c[1])/plots/" * name_files(c...) * ".png")
 end
 
 
@@ -132,14 +133,15 @@ end
 L = 12
 J = -1
 g = -1.0 # can be anything from [-0.5,-1.0,-2.0]
-t = 0.0   # can be anything from collect(0:0.001:1)
-num_samples = 30
-version = 1
+t = 0.1   # can be anything from collect(0:0.001:1)
 
-e = experiment("test", version, L, J, g, t, num_samples)
-e()
+sample_experiment = experiment("sample_convergence_t0t1", 1, L, J, g, 0.1:0.9:1.0, 1000:2000:51000)
 
+transfer_sample_experiment = experiment("transfer_sample_convergence_t0t1", 1, L, J, g, 0.1:0.9:1.0, 1000:2000:51000, new = true)
 
-# For the causal self-attention layer of conditional entropy estimator, 
-# I may use the same parameters from the entropy estimator and see how it performs.
+time_evolve_experiment = experiment("time_evolve", 1, 10:2:18, J, -2.0:1.0:-1.0, 0.0:0.1:1.0, 10000:10000:20000)
+
+sample_experiment()
+transfer_sample_experiment()
+time_evolve_experiment()
 

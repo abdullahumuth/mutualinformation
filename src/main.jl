@@ -1,6 +1,7 @@
 include("./transformer.jl")
 include("./gen_samples.jl")
 include("./read_wvfct.jl")
+using Pkg, Pkg.activate(".")
 using Plots
 using BSON
 using CSV

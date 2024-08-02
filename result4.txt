@@ -1,9 +1,0 @@
-L = 12
-g = -1.0
-J = 1.0
-sample_size = 10000
-t = 0.1
-
-Entropy: 12.006591
-Conditional Entropy: 9.536576
-Mutual Information: 2.4700146

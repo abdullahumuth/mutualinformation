@@ -28,7 +28,13 @@ function spinflip(spin::Vector{Int64}, pos::Int)
   return res
 end
 
-function gen_samples(psi, num_samples, L; thermalizationSweeps = 500, probabilityFunction = wvfct_sq, eps = 0)
+function gen_samples(
+    psi, numSamples, L; 
+    thermalizationSweeps = 500, 
+    probabilityFunction = wvfct_sq, 
+    eps = 0.,
+    nCycles = 1, # can be used to do several cycles of updates, in order to reduce autocorrelation times
+  )
     spin = fill(1, L)
     prob = probabilityFunction(psi, spin; eps)
 
@@ -45,28 +51,41 @@ function gen_samples(psi, num_samples, L; thermalizationSweeps = 500, probabilit
     end
 
     samples = []
-    for numSample in 1:num_samples
+    for numSample in 1:numSamples
+      # global spinflip every 200th step, need to do thermalization again afterwards, probably not necessary to use at all
+      # if numSample % 200 == 0
+      #  for idx in 1:L
+      #    spin = spinflip(spin, idx)
+      #  end
+      #  for _ in 1:thermalizationSweeps
+      #    for idx in 1:L
+      #      updatedSpin = spinflip(spin, idx)
+      #      newProb = probabilityFunction(psi, updatedSpin; eps)
+      #  
+      #      rand() > min(1, newProb/prob) && continue
+      #  
+      #      prob = newProb
+      #      spin = updatedSpin
+      #    end
+      #  end
+      # end
  
-      # iterate through the chain
-      for idx in 1:L
-        updatedSpin = spinflip(spin, idx)
-        newProb = probabilityFunction(psi, updatedSpin; eps)
+      for _ in 1:nCycles 
+        # iterate through the chain
+        for idx in 1:L
+          updatedSpin = spinflip(spin, idx)
+          newProb = probabilityFunction(psi, updatedSpin; eps)
 
-        rand() > min(1, newProb/prob) && continue
+          rand() > min(1, newProb/prob) && continue
 
-        prob = newProb
-        spin = updatedSpin
-      end
-
-      idx = rand(1:L)
-      updatedSpin = spinflip(spin, idx)
-      newProb = probabilityFunction(psi, updatedSpin; eps)
-      if rand() < min(1, newProb/prob)
           prob = newProb
           spin = updatedSpin
+        end
+        push!(samples, spin)
       end
-      push!(samples, spin)
     end
 
     return samples
+    
+    
 end

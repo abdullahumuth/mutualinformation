@@ -6,6 +6,76 @@ using BSON
 using CSV
 using DataFrames
 
+struct experiment
+    name::String
+    L::AbstractRange{}
+    J::AbstractRange{}
+    g::AbstractRange{}
+    t::AbstractRange{}
+    num_samples::AbstractRange{}
+end
+
+function experiment(name, version, L, J, g, t, num_samples)
+    if typeof(L) == Int
+        L = L:1:L
+    end
+    if typeof(J) == Int 
+        J = J:1:J
+    end
+    if typeof(num_samples) == Int
+        num_samples = num_samples:1:num_samples
+    end
+    if typeof(g) == Float64
+        g = g:1.0:g
+    end
+    if typeof(t) == Float64
+        t = t:1.0:t
+    end
+    name = "$(name)_v$(version)"
+    return experiment(name, L, J, g, t, num_samples)
+end
+
+function (exp::experiment)()
+    last_pwd = pwd()
+    try
+        mkdir("./data/outputs/$(e.name)")
+    catch e
+        println("Failed to create directory: ", e)
+    end
+
+    try
+        cd("./data/outputs/$(e.name)")
+    catch e
+        println("Failed to change directory: ", e)
+    end
+
+    for L in exp.L, J in exp.J, g in exp.g, t in exp.t, num_samples in exp.num_samples
+        c = exp.name, L, J, g, t, num_samples
+    try
+        entropy, conditional_entropy = mutualinformation(c[2:end]...)   
+        try
+            save_models(entropy, conditional_entropy, c...)
+        catch e
+            @warn "Failed to save models: " * e.msg
+        end
+        try
+            output_csv(entropy, conditional_entropy, c...)
+        catch e
+            @warn "Failed to save csv: " * e.msg
+        end
+        try
+            save_plots(entropy, conditional_entropy, c...)
+        catch e
+            @warn "Failed to save plots: " * e.msg
+        end
+    catch e
+        @warn "Failed to compute mutual information: " * e.msg
+        end
+    end
+    cd(last_pwd)
+end
+
+
 function mutualinformation(L, J, g, t, num_samples)
     psi = read_wavefunction(L, J, g, t)
     x = stack(gen_samples(psi, num_samples, L), dims = 2) |> todevice
@@ -22,44 +92,38 @@ function mutualinformation(L, J, g, t, num_samples)
 end
 
 function plot_models(a, b)
-    p = plot(a[2].train_losses, label="train")
+    p = plot(a[2].train_losses, label="train", title="Entropy= $(a[1])")
     plot!(a[2].test_losses, label="test")
-    annotate!(length(a[2].train_losses)/4, a[2].test_losses[end/4], text("min epoch: $(a[2].min_epoch)", 12, :left))
-    annotate!(length(a[2].train_losses)/2, a[2].test_losses[end/2], text("final entropy: $(a[1])", 12, :left))
-    p2 = plot(b[2].train_losses, label="train")
+    annotate!(a[2].min_epoch, a[2].test_losses[a[2].min_epoch], text("Minimum at $(a[2].min_epoch)", 12, :left))
+    p2 = plot(b[2].train_losses, label="train", title="Conditional Entropy= $(b[1])")
+    annotate!(b[2].min_epoch, b[2].test_losses[b[2].min_epoch], text("Minimum at $(b[2].min_epoch)", 12, :left))
     plot!(b[2].test_losses, label="test")
-    annotate!(length(b[2].train_losses)/4, b[2].test_losses[end/4], text("min epoch: $(b[2].min_epoch)", 12, :left))
-    annotate!(length(b[2].train_losses)/2, b[2].test_losses[end/2], text("final conditional entropy: $(b[1])", 12, :left))
     return plot(p,p2, layout = (2,1))
 end
 
-function name_files(L, J, g, t, num_samples, VERSION)
-    return "_L=$(L)_J=$(J)_g=$(g)_t=$(t)_num_samples=$(num_samples)_v$(VERSION)"
+function name_files(name, L, J, g, t, num_samples)
+    return "L=$(L)_J=$(J)_g=$(g)_t=$(t)_num_samples=$(num_samples)"
 end
 
-function save_models(a,b,c)
-    L, J, g, t, num_samples, VERSION = c
+function save_models(a,b,c...)
     let 
         entropy_model = cpu(a[2].net)
         conditional_entropy_model = cpu(b[2].net)
-        write("/data/outputs/models/models" * name_files(L, J, g, t, num_samples, VERSION) * ".bson", " ")
-        bson("/data/outputs/models/models" * name_files(L, J, g, t, num_samples, VERSION) * ".bson", entropy = entropy_model, conditional_entropy = conditional_entropy_model)
+        bson("model_" * name_files(c...) * ".bson", entropy = entropy_model, conditional_entropy = conditional_entropy_model)
     end
 end
 
-function output_csv(a,b,c)
-    L, J, g, t, num_samples, VERSION = c
+function output_csv(a,b,c...)
     result = DataFrame(mutual_information = a[1]-b[1], entropy = a[1], conditional_entropy = b[1])
-    CSV.write("/data/outputs/results/result" * name_files(L, J, g, t, num_samples, VERSION) * ".csv", result)
+    CSV.write("result_" * name_files(c...) * ".csv", result)
     entropy_loss = DataFrame(epoch = 1:length(a[2].train_losses), train = a[2].train_losses, test = a[2].test_losses)
-    CSV.write("/data/outputs/losses/entropy_loss" * name_files(L, J, g, t, num_samples, VERSION) * ".csv", entropy_loss)
+    CSV.write("entropy_loss_" * name_files(c...) * ".csv", entropy_loss)
     conditional_entropy_loss = DataFrame(epoch = 1:length(b[2].train_losses), train = b[2].train_losses, test = b[2].test_losses)
-    CSV.write("/data/outputs/losses/conditional_entropy_loss" * name_files(L, J, g, t, num_samples, VERSION) * ".csv", conditional_entropy_loss)
+    CSV.write("conditional_entropy_loss_" * name_files(c...) * ".csv", conditional_entropy_loss)
 end
 
-function save_plots(a,b,c)
-    L, J, g, t, num_samples, VERSION = c
-    savefig(plot_models(a,b), "/data/outputs/plots/plot" * name_files(L, J, g, t, num_samples, VERSION) * ".png")
+function save_plots(a,b,c...)
+    savefig(plot_models(a,b), "plot_" * name_files(c...) * ".png")
 end
 
 
@@ -71,12 +135,8 @@ t = 0.0   # can be anything from collect(0:0.001:1)
 num_samples = 30
 version = 1
 
-c = L, J, g, t, num_samples, version
-
-entropy, conditional_entropy = mutualinformation(L, J, g, t, num_samples)
-#save_models(entropy, conditional_entropy, c)
-output_csv(entropy, conditional_entropy, c)
-save_plots(entropy, conditional_entropy, c)
+e = experiment("test", version, L, J, g, t, num_samples)
+e()
 
 
 # For the causal self-attention layer of conditional entropy estimator, 

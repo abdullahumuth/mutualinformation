@@ -11,8 +11,8 @@ import CUDA
 padding_constant = 0
 
 struct GeneralTransformer{P <: Transformers.Layers.AbstractEmbedding}
-    spin_embed::Dense
-    psi_embed::Union{Nothing, Dense}
+    a_embed::Dense
+    b_embed::Union{Nothing, Dense}
     pos_embed::P
     final_dense::Dense
     decoder::Transformers.Layers.Transformer
@@ -26,22 +26,23 @@ function GeneralTransformer(;
     head_dim::Integer = 8, 
     layer_num::Integer = 2,
     ffn_dim::Integer = 128,
-    conditional::Bool = false)
-    if conditional
-        psi_embed = Dense(1 => embedding_dim) |> todevice
+    a_input_dim::Integer = 2,
+    b_input_dim::Integer = 0,)
+    if b_input_dim != 0
+        b_embed = Dense(b_input_dim => embedding_dim) |> todevice
         decoder = Transformer(PreNormTransformerDecoderBlock, layer_num, head_num, embedding_dim, head_dim, ffn_dim)
         encoder = Transformer(PreNormTransformerBlock, layer_num, head_num, embedding_dim, head_dim, ffn_dim)
     else
-        psi_embed = nothing
+        b_embed = nothing
         decoder = Transformer(PreNormTransformerBlock, layer_num, head_num, embedding_dim, head_dim, ffn_dim)
         encoder = nothing
     end
 
     return GeneralTransformer(
-        Dense(1 => embedding_dim) |> todevice,
-        psi_embed,
+        Dense(a_input_dim => embedding_dim) |> todevice,
+        b_embed,
         SinCosPositionEmbed(embedding_dim) |> todevice,
-        Dense(embedding_dim=>1, sigmoid) |> todevice,
+        Dense(embedding_dim => a_input_dim) |> todevice,
         decoder |> todevice,
         encoder |> todevice,
         NeuralAttentionlib.CausalMask())
@@ -49,18 +50,16 @@ end
 
 
 function embedding(m::GeneralTransformer, x; encoder=false)
-    x = reshape(x, (1, size(x)...)) |> todevice
     if encoder
-        we = m.psi_embed(x)
+        we = m.b_embed(x)
     else
-        we = m.spin_embed(x)
+        we = m.a_embed(x)
     end
     pe = m.pos_embed(we)
     return we .+ pe
 end
 
 function encoder_forward(m::GeneralTransformer, y)
-    y = reshape(y, (1, size(y)...)) |> todevice
     e = embedding(m, y, encoder = true)
     t = m.encoder(e, nothing)
     return t.hidden_state
@@ -86,17 +85,11 @@ end
 # then we calculate the cross entropy (I just want to calculate p(x), that's why I choose h when x = 1 and 1-h when x = 0)
 # we will need the sum of the logarithms of the probabilities, that would be the -log likelihood.
 function (m::GeneralTransformer)(x)
-    #println("shape of x: ", size(x))
-    padded_x = pad_constant(x, (1,0,0,0), padding_constant) 
+    padded_x = pad_constant(x, (0,0,1,0,0,0), padding_constant) 
     h = decoder_forward(m, padded_x)
     h = m.final_dense(h)
-    #println("shape after the final dense h: ", size(h))
     h = h[:,1:end-1,:]
-    h = reshape(h, (size(h)[2:3]...))
-    #println("shape of h: ", size(h))
-    h = h.*(x .== 1) + (1 .- h).*(x .== -1)
-    h = log2.(h)
-    h = -sum(h, dims=1)
+    h = Flux.logitcrossentropy(h, x, agg = (x) -> reshape(sum(x, dims=2), (1,size(x)[3])))
     return h
 end
 
@@ -104,15 +97,12 @@ end
 #conditional probability
 function (m::GeneralTransformer)(x, y)
     
-    padded_x = pad_constant(x, (1,0,0,0), padding_constant)
+    padded_x = pad_constant(x, (0,0,1,0,0,0), padding_constant)
     encoded = encoder_forward(m,y)
     h = cross_attend(m, padded_x, encoded)
     h = m.final_dense(h)
     h = h[:,1:end-1,:]
-    h = reshape(h, (size(h)[2:3]...))
-    h = h.*(x .== 1) + (1 .- h).*(x .== -1)
-    h = log2.(h) 
-    h = -sum(h, dims=1)
+    h = Flux.logitcrossentropy(h, x, agg = (x) -> reshape(sum(x, dims=2), (1,size(x)[3])))
     return h
 end
 
@@ -132,7 +122,7 @@ function train(model, input...;
 
     # organize data
 
-    num_samples = size(input[1])[2]
+    num_samples = size(input[1])[3]
     num_test = Int(floor(test_fraction * num_samples))
     num_valid = Int(floor(validation_fraction * num_samples))
     num_train = num_samples - num_test - num_valid
@@ -140,14 +130,14 @@ function train(model, input...;
     
     if length(input) == 2
         X, Y = input
-        train_input = X[:,1:num_train] , Y[:,1:num_train]
-        test_input = X[:,num_train+1:num_train+num_test], Y[:,num_train+1:num_train+num_test]
-        validation_input = X[:,num_train+num_test+1:end], Y[:,num_train+num_test+1:end]
+        train_input = X[:,:,1:num_train] , Y[:,:,1:num_train]
+        test_input = X[:,:,num_train+1:num_train+num_test], Y[:,:,num_train+1:num_train+num_test]
+        validation_input = X[:,:,num_train+num_test+1:end], Y[:,:,num_train+num_test+1:end]
     else
         X = input[1]
-        train_input = (X[:,1:num_train],)
-        test_input = (X[:,num_train+1:num_train+num_test],)
-        validation_input = (X[:,num_train+num_test+1:end],)
+        train_input = (X[:,:,1:num_train],)
+        test_input = (X[:,:,num_train+1:num_train+num_test],)
+        validation_input = (X[:,:,num_train+num_test+1:end],)
     end
 
     # training
@@ -176,7 +166,7 @@ function train(model, input...;
             Flux.update!(optim, model, grads[1])
         end
         
-        push!(losses, accumulated_loss / size(train_input[1])[end])
+        push!(losses, accumulated_loss  / size(train_input[1])[end])
         push!(test_losses, mean(model(test_input...)))
 
         if size(test_losses)[1]>1

@@ -52,7 +52,7 @@ function (exp::experiment)()
 
     for L in exp.L, J in exp.J, g in exp.g, t in exp.t, num_samples in exp.num_samples
         c = exp.name, L, J, g, t, num_samples
-    try
+    #try
         entropy, conditional_entropy = mutualinformation(c[2:end]..., new = exp.new)
         try
             save_models(entropy, conditional_entropy, c...)
@@ -69,9 +69,9 @@ function (exp::experiment)()
         catch e
             @warn "Failed to save plots: " * e.msg
         end
-    catch e
-        @warn "Failed to compute mutual information: " * e.msg
-    end
+    #catch e
+    #    @warn "Failed to compute mutual information: " * e.msg
+    #end
 
     end
 end
@@ -79,15 +79,22 @@ end
 
 function mutualinformation(L, J, g, t, num_samples; new = false)
     psi = read_wavefunction(L, J, g, t)
-    x = stack(gen_samples(psi, num_samples, L), dims = 2) |> todevice
+    x_proto = stack(gen_samples(psi, num_samples, L), dims = 2) |> todevice
+    x = zeros((2, size(x_proto)...))
+    x[1, :, :] .= Int.(x_proto .== 1)
+    x[2, :, :] .= Int.(x_proto .== -1)
+
     psi_vectorized = cat(transpose(real(psi)), transpose(imag(psi)), dims = 1) |> todevice
-    y = mapslices(x, dims = 1) do xi
+    y = mapslices(x_proto, dims = 1) do xi
         index = parse(Int, join(string.(Int.(xi .== 1))), base=2)
         return Float32.(psi_vectorized[:,index+1])
     end
+    y = reshape(y, (1, size(y)...))
+
+
     model = GeneralTransformer()
     a = train(model, x; progress_bar=false, auto_stop=false)
-    conditional_model = GeneralTransformer(conditional=true)
+    conditional_model = GeneralTransformer(b_input_dim = 1)
     if new
         first_mha = deepcopy(Flux.params(model.decoder.blocks.:(1).attention))
         Flux.loadparams!(conditional_model.decoder.blocks.:(1).attention, first_mha)
@@ -136,13 +143,16 @@ J = -1
 g = -1.0 # can be anything from [-0.5,-1.0,-2.0]
 t = 0.1   # can be anything from collect(0:0.001:1)
 
-sample_experiment = experiment("sample_convergence_t0t1", 1, L, J, g, 0.1:0.9:1.0, 1000:2000:51000)
-
-transfer_sample_experiment = experiment("transfer_sample_convergence_t0t1", 1, L, J, g, 0.1:0.9:1.0, 1000:2000:51000, new = true)
-
-time_evolve_experiment = experiment("time_evolve", 1, 10:2:18, J, -2.0:1.0:-1.0, 0.0:0.1:1.0, 10000:10000:20000)
-
-sample_experiment()
-transfer_sample_experiment()
-time_evolve_experiment()
+#sample_experiment = experiment("sample_convergence_t0t1", 1, L, J, g, 0.1:0.9:1.0, 1000:2000:51000)
+#
+#transfer_sample_experiment = experiment("transfer_sample_convergence_t0t1", 1, L, J, g, 0.1:0.9:1.0, 1000:2000:51000, new = true)
+#
+#time_evolve_experiment = experiment("time_evolve", 1, 10:2:18, J, -2.0:1.0:-1.0, 0.0:0.1:1.0, 10000:10000:20000)
+#
+#sample_experiment()
+#transfer_sample_experiment()
+#time_evolve_experiment()
+display(CUDA.device())
+test = experiment("test", 2, 12, -1, -1.0, 0.0, 200)
+test()
 

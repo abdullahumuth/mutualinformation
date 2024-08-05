@@ -157,4 +157,4 @@ display(CUDA.device())
 #test = experiment("testbro", 2, 12, -1, -1.0, 0.0, 20)
 #test()
 
-sample_experiment = experiment("sample_convergence_t0t1", 1, L, J, g, 0.1:0.9:1.0, 31000:5000:51000)
+sample_experiment = experiment("sample_convergence_t0t1", 2, L, J, g, 0.1:0.9:1.0, 31000:5000:51000)

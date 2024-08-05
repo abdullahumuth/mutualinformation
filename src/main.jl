@@ -81,8 +81,9 @@ function mutualinformation(L, J, g, t, num_samples; new = false)
     psi = read_wavefunction(L, J, g, t)
     x_proto = stack(gen_samples(psi, num_samples, L), dims = 2) |> todevice
     x = zeros((2, size(x_proto)...))
-    x[1, :, :] .= Int.(x_proto .== 1)
-    x[2, :, :] .= Int.(x_proto .== -1)
+    x[1, :, :] .= (x_proto .== 1)
+    x[2, :, :] .= (x_proto .== -1)
+    x = Int.(x)
 
     psi_vectorized = cat(transpose(real(psi)), transpose(imag(psi)), dims = 1) |> todevice
     y = mapslices(x_proto, dims = 1) do xi
@@ -153,6 +154,6 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 #transfer_sample_experiment()
 #time_evolve_experiment()
 display(CUDA.device())
-test = experiment("test", 2, 12, -1, -1.0, 0.0, 200)
+test = experiment("testbro", 2, 12, -1, -1.0, 0.0, 20)
 test()
 

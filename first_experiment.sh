@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=mutual_info_first_exp
+#SBATCH --job-name=mutual_info_second
 #SBATCH --output=./data/outputs/log_file
 #SBATCH --error=./data/outputs/log_file
 #SBATCH -p pgi-8-gpu

@@ -79,6 +79,11 @@ function decoder_forward(m::GeneralTransformer, input)
     return t.hidden_state
 end
 
+function helper(x)
+    x = log2(exp(1)).* sum(x, dims=2)
+    x = reshape(x, (1,size(x)[3]))
+    return x
+end
 
 # we pad to be able to calculate the unconditional probability
 # with the final dense layer we calculate the probability of the next token == 1 (with 1d sigmoid input)
@@ -90,7 +95,7 @@ function (m::GeneralTransformer)(x)
     h = decoder_forward(m, padded_x)
     h = m.final_dense(h)
     h = h[:,1:end-1,:]
-    h = Flux.logitcrossentropy(h, x, agg = (x) -> reshape(sum(x, dims=2), (1,size(x)[3])))
+    h = Flux.logitcrossentropy(h, x, agg = helper)
     return h
 end
 
@@ -103,7 +108,7 @@ function (m::GeneralTransformer)(x, y)
     h = cross_attend(m, padded_x, encoded)
     h = m.final_dense(h)
     h = h[:,1:end-1,:]
-    h = Flux.logitcrossentropy(h, x, agg = (x) -> reshape(sum(x, dims=2), (1,size(x)[3])))
+    h = Flux.logitcrossentropy(h, x, agg = helper)
     return h
 end
 

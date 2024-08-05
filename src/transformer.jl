@@ -7,6 +7,7 @@ using Transformers.Layers
 using NeuralAttentionlib
 using ProgressMeter
 import CUDA
+import cuDNN
 
 padding_constant = 0
 

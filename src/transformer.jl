@@ -115,7 +115,7 @@ Flux.@functor GeneralTransformer
 
 function train(model, input...;
     learning_rate = 1e-4,
-    num_steps = 500,
+    num_steps = 10000,
     batch_size = 128,
     test_fraction = 0.1,
     validation_fraction = 0.1,
@@ -179,7 +179,7 @@ function train(model, input...;
                 min_epoch = epoch
             end
 
-            if auto_stop && max(losses[end-min(100, size(losses)[1]-1):end]...) < min(test_losses...)
+            if auto_stop && mean(losses[end-min(100, size(losses)[1]-1):end]...) < min(test_losses...)
                 break
             end
         end

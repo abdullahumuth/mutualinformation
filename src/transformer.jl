@@ -163,10 +163,11 @@ function train(model, input...;
     for epoch in epochs
         accumulated_loss = 0
         for inp in loader
+            println(typeof(inp))
             loss, grads = Flux.withgradient(model) do m
                 sum(m(inp...))
             end
-
+            println(typeof(model(inp...)))
             accumulated_loss += loss
             Flux.update!(optim, model, grads[1])
         end

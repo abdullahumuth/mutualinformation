@@ -97,7 +97,7 @@ function mutualinformation(X,Y; new = false)
     a_input_dim = size(X)[1]
     b_input_dim = size(Y)[1]
     model = GeneralTransformer(a_input_dim = a_input_dim)
-    a = train(model, X; progress_bar=false, auto_stop=false)
+    a = train(model, X; progress_bar=false,# auto_stop=false)
     conditional_model = GeneralTransformer(a_input_dim = a_input_dim, b_input_dim = b_input_dim)
     if new
         first_mha = deepcopy(Flux.params(model.decoder.blocks.:(1).attention))

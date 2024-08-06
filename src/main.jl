@@ -83,14 +83,14 @@ function mutualinformation(L, J, g, t, num_samples; new = false)
     x = zeros((2, size(x_proto)...))
     x[1, :, :] .= (x_proto .== 1)
     x[2, :, :] .= (x_proto .== -1)
-    x = Int.(x) |> todevice
+    x = Int.(x) |> gpu
 
     psi_vectorized = cat(transpose(real(psi)), transpose(imag(psi)), dims = 1)
     y = mapslices(x_proto, dims = 1) do xi
         index = parse(Int, join(string.(Int.(xi .== 1))), base=2)
         return Float32.(psi_vectorized[:,index+1])
     end
-    y = reshape(y, (1, size(y)...)) |> todevice
+    y = reshape(y, (1, size(y)...)) |> gpu
 
 
     model = GeneralTransformer()
@@ -155,23 +155,10 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 #time_evolve_experiment()
 # display(CUDA.device())
 
-# Create a simple matrix on the GPU
-A = CuArray(rand(100, 100))
 
-# Verify that the array is stored on the GPU
-println("Array stored on: ", typeof(A))
 
-# Perform a simple matrix multiplication on the GPU
-B = A * A
-
-# Verify that the result is also stored on the GPU
-println("Result stored on: ", typeof(B))
-
-# Print the result to verify it worked
-println(B)
-
-#test = experiment("tuesdaytest", 2, 12, -1, -1.0, 0.0, 256, new=false)
-#test()
+test = experiment("tuesdaytest", 2, 12, -1, -1.0, 0.0, 256, new=false)
+test()
 
 # sample_experiment = experiment("sample_convergence_t0t1", 2, L, J, g, 0.1:0.9:1.0, 31000:5000:51000)
 # sample_experiment()

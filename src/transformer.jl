@@ -29,7 +29,7 @@ function GeneralTransformer(;
     a_input_dim::Integer = 2,
     b_input_dim::Integer = 0,)
     if b_input_dim != 0
-        b_embed = Dense(b_input_dim => embedding_dim) |> todevice
+        b_embed = Dense(b_input_dim => embedding_dim)
         decoder = Transformer(PreNormTransformerDecoderBlock, layer_num, head_num, embedding_dim, head_dim, ffn_dim)
         encoder = Transformer(PreNormTransformerBlock, layer_num, head_num, embedding_dim, head_dim, ffn_dim)
     else
@@ -39,12 +39,12 @@ function GeneralTransformer(;
     end
 
     return GeneralTransformer(
-        Dense(a_input_dim => embedding_dim) |> todevice,
-        b_embed,
-        SinCosPositionEmbed(embedding_dim) |> todevice,
-        Dense(embedding_dim => a_input_dim) |> todevice,
-        decoder |> todevice,
-        encoder |> todevice,
+        Dense(a_input_dim => embedding_dim) |> gpu,
+        b_embed |> gpu,
+        SinCosPositionEmbed(embedding_dim) |> gpu,
+        Dense(embedding_dim => a_input_dim) |> gpu,
+        decoder |> gpu,
+        encoder |> gpu,
         NeuralAttentionlib.CausalMask())
 end
 

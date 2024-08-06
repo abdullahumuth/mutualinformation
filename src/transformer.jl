@@ -9,7 +9,7 @@ using ProgressMeter
 import CUDA
 import cuDNN
 
-padding_constant = 0
+padding_constant = -1
 
 struct GeneralTransformer{P <: Transformers.Layers.AbstractEmbedding}
     a_embed::Dense

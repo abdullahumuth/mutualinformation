@@ -11,11 +11,11 @@ using DataFrames
 
 struct experiment
     name::String
-    L::AbstractRange{}
-    J::AbstractRange{}
-    g::AbstractRange{}
-    t::AbstractRange{}
-    num_samples::AbstractRange{}
+    L::Union{AbstractRange, Base.Generator}
+    J::Union{AbstractRange, Base.Generator}
+    g::Union{AbstractRange, Base.Generator}
+    t::Union{AbstractRange, Base.Generator}
+    num_samples::Union{AbstractRange, Base.Generator}
     new::Bool
 end
 
@@ -52,7 +52,7 @@ function (exp::experiment)()
 
     for L in exp.L, J in exp.J, g in exp.g, t in exp.t, num_samples in exp.num_samples
         c = exp.name, L, J, g, t, num_samples
-    #try
+    try
         entropy, conditional_entropy = mutualinformation(inputhandler(c[2:end]...)..., new = exp.new)
         try
             save_models(entropy, conditional_entropy, c...)
@@ -69,9 +69,9 @@ function (exp::experiment)()
         catch e
             @warn "Failed to save plots: " * e.msg
         end
-    #catch e
-    #    @warn "Failed to compute mutual information: " * e.msg
-    #end
+    catch e
+        @warn "Failed to compute mutual information: " * e.msg
+    end
 
     end
 end
@@ -83,7 +83,6 @@ function inputhandler(L,J,g,t,num_samples)
     x[1, :, :] .= (x_proto .== 1)
     x[2, :, :] .= (x_proto .== -1)
     x = Int.(x) |> gpu
-    println(typeof(x))
 
     psi_vectorized = cat(transpose(real(psi)), transpose(imag(psi)), dims = 1)
     y = mapslices(x_proto, dims = 1) do xi
@@ -148,22 +147,22 @@ J = -1
 g = -1.0 # can be anything from [-0.5,-1.0,-2.0]
 t = 0.1   # can be anything from collect(0:0.001:1)
 
-#sample_experiment = experiment("sample_convergence_t0t1", 1, L, J, g, 0.1:0.9:1.0, 1000:2000:51000)
-#
-#transfer_sample_experiment = experiment("transfer_sample_convergence_t0t1", 1, L, J, g, 0.1:0.9:1.0, 1000:2000:51000, new = true)
-#
+sample_experiment = experiment("sample_convergence_t01t1", 3, L, J, g, 0.1:0.9:1.0, (2^x for x=4:16))
+
+transfer_sample_experiment = experiment("transfer_sample_convergence_t01t1", 1, L, J, g, 0.1:0.9:1.0, (2^x for x=4:16), new = true)
+
 #time_evolve_experiment = experiment("time_evolve", 1, 10:2:18, J, -2.0:1.0:-1.0, 0.0:0.1:1.0, 10000:10000:20000)
-#
-#sample_experiment()
-#transfer_sample_experiment()
-#time_evolve_experiment()
-# display(CUDA.device())
 
-
-# test = experiment("tuesdaytest", 2, 12, -1, -1.0, 0.0, 256, new=false)
-# test()
-
-
-
-sample_experiment = experiment("sample_convergence_t0t1", 3, L, J, g, 0.1:0.9:1.0, 46000:5000:51000)
 sample_experiment()
+transfer_sample_experiment()
+#time_evolve_experiment()
+
+
+
+#test = experiment("tuesdaytest", 2, 12, -1, -1.0, 0.0, (2^x for x=4:8), new=false)
+#test()
+
+
+
+#sample_experiment = experiment("sample_convergence_t0t1", 3, L, J, g, 0.1:0.9:1.0, 46000:5000:51000)
+#sample_experiment()

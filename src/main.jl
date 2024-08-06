@@ -84,6 +84,7 @@ function mutualinformation(L, J, g, t, num_samples; new = false)
     x[1, :, :] .= (x_proto .== 1)
     x[2, :, :] .= (x_proto .== -1)
     x = Int.(x) |> gpu
+    println(typeof(x))
 
     psi_vectorized = cat(transpose(real(psi)), transpose(imag(psi)), dims = 1)
     y = mapslices(x_proto, dims = 1) do xi
@@ -156,9 +157,10 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 # display(CUDA.device())
 
 
-
 test = experiment("tuesdaytest", 2, 12, -1, -1.0, 0.0, 256, new=false)
 test()
+
+
 
 # sample_experiment = experiment("sample_convergence_t0t1", 2, L, J, g, 0.1:0.9:1.0, 31000:5000:51000)
 # sample_experiment()

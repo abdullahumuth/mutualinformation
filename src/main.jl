@@ -52,7 +52,7 @@ function (exp::experiment)()
 
     for L in exp.L, J in exp.J, g in exp.g, t in exp.t, num_samples in exp.num_samples
         c = exp.name, L, J, g, t, num_samples
-    #try
+    try
         entropy, conditional_entropy = mutualinformation(c[2:end]..., new = exp.new)
         try
             save_models(entropy, conditional_entropy, c...)
@@ -69,9 +69,9 @@ function (exp::experiment)()
         catch e
             @warn "Failed to save plots: " * e.msg
         end
-    #catch e
-    #    @warn "Failed to compute mutual information: " * e.msg
-    #end
+    catch e
+        @warn "Failed to compute mutual information: " * e.msg
+    end
 
     end
 end
@@ -158,3 +158,4 @@ display(CUDA.device())
 #test()
 
 sample_experiment = experiment("sample_convergence_t0t1", 2, L, J, g, 0.1:0.9:1.0, 31000:5000:51000)
+sample_experiment()

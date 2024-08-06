@@ -172,7 +172,7 @@ function train(model, input...;
             Flux.update!(optim, model, grads[1])
         end
         
-        push!(losses, accumulated_loss  / size(train_input[1])[end])
+        push!(losses, accumulated_loss / size(train_input[1])[end])
         push!(test_losses, mean(model(test_input...)))
 
         if size(test_losses)[1]>1

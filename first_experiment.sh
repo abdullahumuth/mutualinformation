@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=mutual_info_second
-#SBATCH --output=./data/outputs/log_file
-#SBATCH --error=./data/outputs/log_file
+#SBATCH --output=./data/outputs/output%j.%N.out
+#SBATCH --error=./data/outputs/error%j.%N.err
 #SBATCH -p pgi-8-gpu
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2

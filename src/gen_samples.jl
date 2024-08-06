@@ -53,22 +53,22 @@ function gen_samples(
     samples = []
     for numSample in 1:numSamples
       # global spinflip every 200th step, need to do thermalization again afterwards, probably not necessary to use at all
-      # if numSample % 200 == 0
-      #  for idx in 1:L
-      #    spin = spinflip(spin, idx)
-      #  end
-      #  for _ in 1:thermalizationSweeps
-      #    for idx in 1:L
-      #      updatedSpin = spinflip(spin, idx)
-      #      newProb = probabilityFunction(psi, updatedSpin; eps)
-      #  
-      #      rand() > min(1, newProb/prob) && continue
-      #  
-      #      prob = newProb
-      #      spin = updatedSpin
-      #    end
-      #  end
-      # end
+      if numSample % 200 == 0
+       for idx in 1:L
+         spin = spinflip(spin, idx)
+       end
+       for _ in 1:thermalizationSweeps
+         for idx in 1:L
+           updatedSpin = spinflip(spin, idx)
+           newProb = probabilityFunction(psi, updatedSpin; eps)
+       
+           rand() > min(1, newProb/prob) && continue
+       
+           prob = newProb
+           spin = updatedSpin
+         end
+       end
+      end
  
       for _ in 1:nCycles 
         # iterate through the chain

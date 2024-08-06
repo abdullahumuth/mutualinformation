@@ -52,7 +52,7 @@ function (exp::experiment)()
 
     for L in exp.L, J in exp.J, g in exp.g, t in exp.t, num_samples in exp.num_samples
         c = exp.name, L, J, g, t, num_samples
-    #try
+    try
         entropy, conditional_entropy = mutualinformation(c[2:end]..., new = exp.new)
         try
             save_models(entropy, conditional_entropy, c...)
@@ -69,9 +69,9 @@ function (exp::experiment)()
         catch e
             @warn "Failed to save plots: " * e.msg
         end
-    #catch e
-    #    @warn "Failed to compute mutual information: " * e.msg
-    #end
+    catch e
+        @warn "Failed to compute mutual information: " * e.msg
+    end
 
     end
 end
@@ -79,18 +79,18 @@ end
 
 function mutualinformation(L, J, g, t, num_samples; new = false)
     psi = read_wavefunction(L, J, g, t)
-    x_proto = stack(gen_samples(psi, num_samples, L), dims = 2) |> todevice
+    x_proto = stack(gen_samples(psi, num_samples, L), dims = 2)
     x = zeros((2, size(x_proto)...))
     x[1, :, :] .= (x_proto .== 1)
     x[2, :, :] .= (x_proto .== -1)
-    x = Int.(x)
+    x = Int.(x) |> todevice
 
-    psi_vectorized = cat(transpose(real(psi)), transpose(imag(psi)), dims = 1) |> todevice
+    psi_vectorized = cat(transpose(real(psi)), transpose(imag(psi)), dims = 1)
     y = mapslices(x_proto, dims = 1) do xi
         index = parse(Int, join(string.(Int.(xi .== 1))), base=2)
         return Float32.(psi_vectorized[:,index+1])
     end
-    y = reshape(y, (1, size(y)...))
+    y = reshape(y, (1, size(y)...)) |> todevice
 
 
     model = GeneralTransformer()
@@ -154,8 +154,24 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 #transfer_sample_experiment()
 #time_evolve_experiment()
 # display(CUDA.device())
-# test = experiment("testbrooo", 2, 12, -1, -1.0, 0.0, 32, new=false)
-# test()
 
-sample_experiment = experiment("sample_convergence_t0t1", 2, L, J, g, 0.1:0.9:1.0, 31000:5000:51000)
-sample_experiment()
+# Create a simple matrix on the GPU
+A = CuArray(rand(100, 100))
+
+# Verify that the array is stored on the GPU
+println("Array stored on: ", typeof(A))
+
+# Perform a simple matrix multiplication on the GPU
+B = A * A
+
+# Verify that the result is also stored on the GPU
+println("Result stored on: ", typeof(B))
+
+# Print the result to verify it worked
+println(B)
+
+#test = experiment("tuesdaytest", 2, 12, -1, -1.0, 0.0, 256, new=false)
+#test()
+
+# sample_experiment = experiment("sample_convergence_t0t1", 2, L, J, g, 0.1:0.9:1.0, 31000:5000:51000)
+# sample_experiment()

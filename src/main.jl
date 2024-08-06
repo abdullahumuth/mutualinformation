@@ -53,7 +53,7 @@ function (exp::experiment)()
     for L in exp.L, J in exp.J, g in exp.g, t in exp.t, num_samples in exp.num_samples
         c = exp.name, L, J, g, t, num_samples
     #try
-        entropy, conditional_entropy = mutualinformation(c[2:end]..., new = exp.new)
+        entropy, conditional_entropy = mutualinformation(inputhandler(c[2:end]...)..., new = exp.new)
         try
             save_models(entropy, conditional_entropy, c...)
         catch e
@@ -76,8 +76,7 @@ function (exp::experiment)()
     end
 end
 
-
-function mutualinformation(L, J, g, t, num_samples; new = false)
+function inputhandler(L,J,g,t,num_samples)
     psi = read_wavefunction(L, J, g, t)
     x_proto = stack(gen_samples(psi, num_samples, L), dims = 2)
     x = zeros((2, size(x_proto)...))
@@ -92,16 +91,20 @@ function mutualinformation(L, J, g, t, num_samples; new = false)
         return Float32.(psi_vectorized[:,index+1])
     end
     y = reshape(y, (1, size(y)...)) |> gpu
+    return x, y
+end
 
-
-    model = GeneralTransformer()
-    a = train(model, x; progress_bar=false, auto_stop=false)
-    conditional_model = GeneralTransformer(b_input_dim = 1)
+function mutualinformation(X,Y; new = false)
+    a_input_dim = size(X)[1]
+    b_input_dim = size(Y)[1]
+    model = GeneralTransformer(a_input_dim = a_input_dim)
+    a = train(model, X; progress_bar=false, auto_stop=false)
+    conditional_model = GeneralTransformer(a_input_dim = a_input_dim, b_input_dim = b_input_dim)
     if new
         first_mha = deepcopy(Flux.params(model.decoder.blocks.:(1).attention))
         Flux.loadparams!(conditional_model.decoder.blocks.:(1).attention, first_mha)
     end
-    b = train(conditional_model, x, y; progress_bar=false, auto_stop=false) 
+    b = train(conditional_model, X, Y; progress_bar=false, auto_stop=false) 
     return a, b
 end
 
@@ -157,10 +160,10 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 # display(CUDA.device())
 
 
-test = experiment("tuesdaytest", 2, 12, -1, -1.0, 0.0, 256, new=false)
-test()
+# test = experiment("tuesdaytest", 2, 12, -1, -1.0, 0.0, 256, new=false)
+# test()
 
 
 
-# sample_experiment = experiment("sample_convergence_t0t1", 2, L, J, g, 0.1:0.9:1.0, 31000:5000:51000)
-# sample_experiment()
+sample_experiment = experiment("sample_convergence_t0t1", 3, L, J, g, 0.1:0.9:1.0, 46000:5000:51000)
+sample_experiment()

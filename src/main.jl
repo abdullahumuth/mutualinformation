@@ -147,15 +147,15 @@ J = -1
 g = -1.0 # can be anything from [-0.5,-1.0,-2.0]
 t = 0.1   # can be anything from collect(0:0.001:1)
 
-sample_experiment = experiment("sample_convergence_t01t1", 3, L, J, g, 0.1:0.9:1.0, (2^x for x=4:16))
+#sample_experiment = experiment("sample_convergence_t01t1", 3, L, J, g, 0.1:0.9:1.0, (2^x for x=4:16))
 
-transfer_sample_experiment = experiment("transfer_sample_convergence_t01t1", 1, L, J, g, 0.1:0.9:1.0, (2^x for x=4:16), new = true)
+#transfer_sample_experiment = experiment("transfer_sample_convergence_t01t1", 1, L, J, g, 0.1:0.9:1.0, (2^x for x=4:16), new = true)
 
-#time_evolve_experiment = experiment("time_evolve", 1, 10:2:18, J, -2.0:1.0:-1.0, 0.0:0.1:1.0, 10000:10000:20000)
+time_evolve_experiment = experiment("time_evolve", 1, 10:2:18, J, -2.0:1.0:-1.0, 0.0:0.1:1.0, 10000:10000:20000)
 
-sample_experiment()
-transfer_sample_experiment()
-#time_evolve_experiment()
+#sample_experiment()
+#transfer_sample_experiment()
+time_evolve_experiment()
 
 
 

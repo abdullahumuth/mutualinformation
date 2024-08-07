@@ -153,6 +153,7 @@ function train(model, input...;
 
     losses = []
     test_losses = []
+    times = [Float64(0)]
     min_epoch = 0
 
     epochs = 1:max_epochs
@@ -160,14 +161,20 @@ function train(model, input...;
     if progress_bar
         progress = Progress(max_epochs; dt=1.0)
     end
+    early_stopper = Flux.early_stopping(()->test_losses[end], 100; init_score = Inf)
     for epoch in epochs
         accumulated_loss = 0
         for inp in loader
+            (epoch + 1) % 100 == 0 && (t1 = time()) 
             loss, grads = Flux.withgradient(model) do m
                 sum(m(inp...))
             end
             accumulated_loss += loss
             Flux.update!(optim, model, grads[1])
+            if (epoch + 1) % 100 == 0
+                t2 = time()
+                push!(times, t2-t1)
+            end
         end
         
         push!(losses, accumulated_loss / size(train_input[1])[end])
@@ -179,9 +186,7 @@ function train(model, input...;
                 min_epoch = epoch
             end
 
-            if auto_stop && mean(losses[end-min(100, size(losses)[1]-1):end]...) < min(test_losses...)
-                break
-            end
+            auto_stop && early_stopper() && break
         end
 
         if progress_bar
@@ -193,7 +198,9 @@ function train(model, input...;
 
     output = mean(model(validation_input...))
 
-    return output, (train_losses = Float32.(losses), test_losses = Float32.(test_losses), min_epoch = min_epoch, net=model)
+    length(times) > 1 && popfirst!(times)
+
+    return output, (train_losses = Float32.(losses), test_losses = Float32.(test_losses), min_epoch = min_epoch, net=model, avg_time = mean(times))
 
 end 
 

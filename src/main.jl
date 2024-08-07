@@ -8,9 +8,9 @@ using Plots
 using BSON
 using CSV
 using DataFrames
+using Distributions
 
 struct experiment
-    name::String
     L::Union{AbstractRange, Base.Generator}
     J::Union{AbstractRange, Base.Generator}
     g::Union{AbstractRange, Base.Generator}
@@ -18,7 +18,7 @@ struct experiment
     num_samples::Union{AbstractRange, Base.Generator}
 end
 
-function experiment(name, version, L, J, g, t, num_samples)
+function experiment(L, J, g, t, num_samples)
     if typeof(L) == Int
         L = L:1:L
     end
@@ -34,41 +34,46 @@ function experiment(name, version, L, J, g, t, num_samples)
     if typeof(t) == Float64
         t = t:1.0:t
     end
-    name = "$(name)_v$(version)"
-    return experiment(name, L, J, g, t, num_samples)
+    return experiment(L, J, g, t, num_samples)
 end
 
 function mkdir_safe(path)
     try mkdir(path) catch e @warn "Probably file already exists: " * e.msg end
 end
 
-function (exp::experiment)(;kwargs...)
-    mkdir_safe("data/outputs/$(exp.name)")
-    mkdir_safe("data/outputs/$(exp.name)/models")
-    mkdir_safe("data/outputs/$(exp.name)/losses")
-    mkdir_safe("data/outputs/$(exp.name)/plots")
-    mkdir_safe("data/outputs/$(exp.name)/results")
+function (exp::experiment)(name="nameless_exp", version=1;kwargs...)
+    name = "$(name)_v$(version)"
+
+    mkdir_safe("data/outputs/$(name)")
+    mkdir_safe("data/outputs/$(name)/models")
+    mkdir_safe("data/outputs/$(name)/losses")
+    mkdir_safe("data/outputs/$(name)/plots")
+    mkdir_safe("data/outputs/$(name)/results")
 
     for L in exp.L, J in exp.J, g in exp.g, t in exp.t, num_samples in exp.num_samples
-        c = exp.name, L, J, g, t, num_samples
+        c = name, L, J, g, t, num_samples
     try
-        entropy, conditional_entropy = mutualinformation(inputhandler(c[2:end]...)..., kwargs...)
+        entropy, conditional_entropy = mutualinformation(inputhandler(c[2:end]...)...; kwargs...)
         try
             save_models(entropy, conditional_entropy, c...)
         catch e
+            if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
             @warn "Failed to save models: " * e.msg
         end
         try
-            output_csv(entropy, conditional_entropy, c...)
+           output_csv(entropy, conditional_entropy, c...; kwargs...)
         catch e
+            if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
             @warn "Failed to save csv: " * e.msg
         end
         try
             save_plots(entropy, conditional_entropy, c...)
         catch e
-            @warn "Failed to save plots: " * e.msg
+            if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
+            @warn "Failed to save plots: " * str
         end
     catch e
+        if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
         @warn "Failed to compute mutual information: " * e.msg
     end
     end
@@ -76,18 +81,19 @@ end
 
 function inputhandler(L,J,g,t,num_samples)
     psi = read_wavefunction(L, J, g, t)
-    x_proto = stack(gen_samples(psi, num_samples, L), dims = 2)
+    dist = Categorical(abs2.(psi))
+    indices = rand(dist, num_samples)
+    f(x) = digits(x, base=2, pad = L)|> reverse
+    x_proto = stack(map(f, indices))
+
     x = zeros((2, size(x_proto)...))
-    x[1, :, :] .= (x_proto .== 1)
-    x[2, :, :] .= (x_proto .== -1)
+    x[1, :, :] .= x_proto
+    x[2, :, :] .= 1 .- x_proto
     x = Int.(x) |> gpu
 
-    psi_vectorized = cat(transpose(real(psi)), transpose(imag(psi)), dims = 1)
-    y = mapslices(x_proto, dims = 1) do xi
-        index = parse(Int, join(string.(Int.(xi .== 1))), base=2)
-        return Float32.(psi_vectorized[:,index+1])
-    end
+    y = stack(map(x -> [real(psi[x+1]), imag(psi[x+1])], indices))
     y = reshape(y, (1, size(y)...)) |> gpu
+
     return x, y
 end
 
@@ -125,8 +131,8 @@ function save_models(a,b,c...)
     end
 end
 
-function output_csv(a,b,c...)
-    result = DataFrame(mutual_information = a[1]-b[1], entropy = a[1], conditional_entropy = b[1])
+function output_csv(a,b,c...; kwargs...)
+    result = DataFrame(:mutual_information => a[1]-b[1], :entropy => a[1], :conditional_entropy => b[1], :avg_time_entropy => a[2].avg_time, :avg_time_conditional_entropy => b[2].avg_time, kwargs...)
     CSV.write("data/outputs/$(c[1])/results/" * name_files(c...) * ".csv", result)
     entropy_loss = DataFrame(epoch = 1:length(a[2].train_losses), train = a[2].train_losses, test = a[2].test_losses)
     CSV.write("data/outputs/$(c[1])/losses/entropy_" * name_files(c...) * ".csv", entropy_loss)
@@ -145,9 +151,13 @@ J = -1
 g = -1.0 # can be anything from [-0.5,-1.0,-2.0]
 t = 0.1   # can be anything from collect(0:0.001:1)
 
-#sample_experiment = experiment("sample_convergence_t01t1", 3, L, J, g, 0.1:0.9:1.0, (2^x for x=4:16))
-
-#transfer_sample_experiment = experiment("transfer_sample_convergence_t01t1", 1, L, J, g, 0.1:0.9:1.0, (2^x for x=4:16), new = true)
+sample_experiment = experiment(L, J, g, 0.1:0.9:1.0, (2^x for x=4:16))
+sample_experiment("sample_convergence_newest", 1; )
+sample_experiment("transfer_sample_convergence_newest", 1; new = true)
+sample_experiment("sample_convergence_newest_batch256", 1; batch_size = 256)
+sample_experiment("sample_convergence_newest_batch512", 1; batch_size = 512)
+sample_experiment("sample_convergence_newest_batch1024", 1; batch_size = 1024)
+sample_experiment("transfer_sample_convergence_newest_batch1024", 1; batch_size = 1024, new = true)
 
 #time_evolve_experiment = experiment("time_evolve", 1, 10:2:18, J, -2.0:1.0:-1.0, 0.0:0.1:1.0, 10000:10000:20000)
 
@@ -155,15 +165,3 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 #transfer_sample_experiment()
 #time_evolve_experiment()
 
-
-
-test = experiment("proto_autostop_wednesdaytest", 1, 12, -1, -1.0, 0.0, 100)
-test(auto_stop=true)
-
-test2 = experiment("proto-no_stop_wednesdaytest", 1, 12, -1, -1.0, 0.0, 100)
-test2(auto_stop=false, max_epochs=1000)
-
-
-
-#sample_experiment = experiment("sample_convergence_t0t1", 3, L, J, g, 0.1:0.9:1.0, 46000:5000:51000)
-#sample_experiment()

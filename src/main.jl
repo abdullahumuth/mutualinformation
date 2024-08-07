@@ -16,10 +16,9 @@ struct experiment
     g::Union{AbstractRange, Base.Generator}
     t::Union{AbstractRange, Base.Generator}
     num_samples::Union{AbstractRange, Base.Generator}
-    new::Bool
 end
 
-function experiment(name, version, L, J, g, t, num_samples; new = false)
+function experiment(name, version, L, J, g, t, num_samples)
     if typeof(L) == Int
         L = L:1:L
     end
@@ -36,14 +35,14 @@ function experiment(name, version, L, J, g, t, num_samples; new = false)
         t = t:1.0:t
     end
     name = "$(name)_v$(version)"
-    return experiment(name, L, J, g, t, num_samples, new)
+    return experiment(name, L, J, g, t, num_samples)
 end
 
 function mkdir_safe(path)
     try mkdir(path) catch e @warn "Probably file already exists: " * e.msg end
 end
 
-function (exp::experiment)()
+function (exp::experiment)(;kwargs...)
     mkdir_safe("data/outputs/$(exp.name)")
     mkdir_safe("data/outputs/$(exp.name)/models")
     mkdir_safe("data/outputs/$(exp.name)/losses")
@@ -53,7 +52,7 @@ function (exp::experiment)()
     for L in exp.L, J in exp.J, g in exp.g, t in exp.t, num_samples in exp.num_samples
         c = exp.name, L, J, g, t, num_samples
     try
-        entropy, conditional_entropy = mutualinformation(inputhandler(c[2:end]...)..., new = exp.new)
+        entropy, conditional_entropy = mutualinformation(inputhandler(c[2:end]...)..., kwargs...)
         try
             save_models(entropy, conditional_entropy, c...)
         catch e
@@ -72,7 +71,6 @@ function (exp::experiment)()
     catch e
         @warn "Failed to compute mutual information: " * e.msg
     end
-
     end
 end
 
@@ -93,17 +91,17 @@ function inputhandler(L,J,g,t,num_samples)
     return x, y
 end
 
-function mutualinformation(X,Y; new = false)
+function mutualinformation(X,Y; new = false, kwargs...)
     a_input_dim = size(X)[1]
     b_input_dim = size(Y)[1]
     model = GeneralTransformer(a_input_dim = a_input_dim)
-    a = train(model, X; progress_bar=false,# auto_stop=false)
+    a = train(model, X; kwargs...)
     conditional_model = GeneralTransformer(a_input_dim = a_input_dim, b_input_dim = b_input_dim)
     if new
         first_mha = deepcopy(Flux.params(model.decoder.blocks.:(1).attention))
         Flux.loadparams!(conditional_model.decoder.blocks.:(1).attention, first_mha)
     end
-    b = train(conditional_model, X, Y; progress_bar=false, auto_stop=false) 
+    b = train(conditional_model, X, Y; kwargs...) 
     return a, b
 end
 
@@ -151,16 +149,19 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 
 #transfer_sample_experiment = experiment("transfer_sample_convergence_t01t1", 1, L, J, g, 0.1:0.9:1.0, (2^x for x=4:16), new = true)
 
-time_evolve_experiment = experiment("time_evolve", 1, 10:2:18, J, -2.0:1.0:-1.0, 0.0:0.1:1.0, 10000:10000:20000)
+#time_evolve_experiment = experiment("time_evolve", 1, 10:2:18, J, -2.0:1.0:-1.0, 0.0:0.1:1.0, 10000:10000:20000)
 
 #sample_experiment()
 #transfer_sample_experiment()
-time_evolve_experiment()
+#time_evolve_experiment()
 
 
 
-#test = experiment("tuesdaytest", 2, 12, -1, -1.0, 0.0, (2^x for x=4:8), new=false)
-#test()
+test = experiment("proto_autostop_wednesdaytest", 1, 12, -1, -1.0, 0.0, 100)
+test(auto_stop=true)
+
+test2 = experiment("proto-no_stop_wednesdaytest", 1, 12, -1, -1.0, 0.0, 100)
+test2(auto_stop=false, max_epochs=1000)
 
 
 

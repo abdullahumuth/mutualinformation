@@ -161,10 +161,10 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 
 time_evolve_experiment = experiment(10:2:18, J, -2.0:1.0:-1.0, 0.0:0.1:1.0, 10000)
 
-time_evolve_experiment("time_evolve_convergence_newest", 1; max_epochs = 10000)
-time_evolve_experiment("transfer_time_evolve_convergence_newest", 1; max_epochs = 10000, new = true)
-time_evolve_experiment("time_evolve_convergence_newest_batch1024", 1; max_epochs = 10000, batch_size = 1024)
-time_evolve_experiment("transfer_time_evolve_convergence_newest_batch1024", 1; max_epochs = 10000, batch_size = 1024, new = true)
+time_evolve_experiment("time_evolve_convergence_newest", 1)
+time_evolve_experiment("transfer_time_evolve_convergence_newest", 1; new = true)
+time_evolve_experiment("time_evolve_convergence_newest_batch1024", 1; batch_size = 1024)
+time_evolve_experiment("transfer_time_evolve_convergence_newest_batch1024", 1; batch_size = 1024, new = true)
 
 #sample_experiment()
 #transfer_sample_experiment()

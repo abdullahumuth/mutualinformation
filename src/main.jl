@@ -151,15 +151,20 @@ J = -1
 g = -1.0 # can be anything from [-0.5,-1.0,-2.0]
 t = 0.1   # can be anything from collect(0:0.001:1)
 
-sample_experiment = experiment(L, J, g, 0.1:0.9:1.0, (2^x for x=4:16))
-sample_experiment("sample_convergence_newest", 1; )
-sample_experiment("transfer_sample_convergence_newest", 1; new = true)
-sample_experiment("sample_convergence_newest_batch256", 1; batch_size = 256)
-sample_experiment("sample_convergence_newest_batch512", 1; batch_size = 512)
-sample_experiment("sample_convergence_newest_batch1024", 1; batch_size = 1024)
-sample_experiment("transfer_sample_convergence_newest_batch1024", 1; batch_size = 1024, new = true)
+# sample_experiment = experiment(L, J, g, 0.1:0.9:1.0, (2^x for x=4:16))
+# sample_experiment("sample_convergence_newest", 1; )
+# sample_experiment("transfer_sample_convergence_newest", 1; new = true)
+# sample_experiment("sample_convergence_newest_batch256", 1; batch_size = 256)
+# sample_experiment("sample_convergence_newest_batch512", 1; batch_size = 512)
+# sample_experiment("sample_convergence_newest_batch1024", 1; batch_size = 1024)
+# sample_experiment("transfer_sample_convergence_newest_batch1024", 1; batch_size = 1024, new = true)
 
-#time_evolve_experiment = experiment("time_evolve", 1, 10:2:18, J, -2.0:1.0:-1.0, 0.0:0.1:1.0, 10000:10000:20000)
+time_evolve_experiment = experiment(10:2:18, J, -2.0:1.0:-1.0, 0.0:0.1:1.0, 10000)
+
+time_evolve_experiment("time_evolve_convergence_newest", 1; max_epochs = 10000)
+time_evolve_experiment("transfer_time_evolve_convergence_newest", 1; max_epochs = 10000, new = true)
+time_evolve_experiment("time_evolve_convergence_newest_batch1024", 1; max_epochs = 10000, batch_size = 1024)
+time_evolve_experiment("transfer_time_evolve_convergence_newest_batch1024", 1; max_epochs = 10000, batch_size = 1024, new = true)
 
 #sample_experiment()
 #transfer_sample_experiment()

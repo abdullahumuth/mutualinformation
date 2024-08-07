@@ -84,14 +84,14 @@ function inputhandler(L,J,g,t,num_samples)
     dist = Categorical(abs2.(psi))
     indices = rand(dist, num_samples)
     f(x) = digits(x, base=2, pad = L)|> reverse
-    x_proto = stack(map(f, indices))
+    x_proto = stack(map(f, indices .- 1))
 
     x = zeros((2, size(x_proto)...))
     x[1, :, :] .= x_proto
     x[2, :, :] .= 1 .- x_proto
     x = Int.(x) |> gpu
 
-    y = stack(map(x -> [real(psi[x+1]), imag(psi[x+1])], indices))
+    y = stack(map(x -> [real(psi[x]), imag(psi[x])], indices))
     y = reshape(y, (1, size(y)...)) |> gpu
 
     return x, y
@@ -151,20 +151,23 @@ J = -1
 g = -1.0 # can be anything from [-0.5,-1.0,-2.0]
 t = 0.1   # can be anything from collect(0:0.001:1)
 
-# sample_experiment = experiment(L, J, g, 0.1:0.9:1.0, (2^x for x=4:16))
-# sample_experiment("sample_convergence_newest", 1; )
-# sample_experiment("transfer_sample_convergence_newest", 1; new = true)
-# sample_experiment("sample_convergence_newest_batch256", 1; batch_size = 256)
-# sample_experiment("sample_convergence_newest_batch512", 1; batch_size = 512)
-# sample_experiment("sample_convergence_newest_batch1024", 1; batch_size = 1024)
-# sample_experiment("transfer_sample_convergence_newest_batch1024", 1; batch_size = 1024, new = true)
+#test = experiment(L, J, g, 1.0, 100)
+#test("test", 1)
 
-time_evolve_experiment = experiment(10:2:18, J, -2.0:1.0:-1.0, 0.0:0.1:1.0, 10000)
+sample_experiment = experiment(L, J, g, 0.1:0.9:1.0, (2^x for x=4:16))
+sample_experiment("sample_convergence_newest", 1; )
+sample_experiment("transfer_sample_convergence_newest", 1; new = true)
+sample_experiment("sample_convergence_newest_batch256", 1; batch_size = 256)
+sample_experiment("sample_convergence_newest_batch512", 1; batch_size = 512)
+sample_experiment("sample_convergence_newest_batch1024", 1; batch_size = 1024)
+sample_experiment("transfer_sample_convergence_newest_batch1024", 1; batch_size = 1024, new = true)
 
-time_evolve_experiment("time_evolve_convergence_newest", 1)
-time_evolve_experiment("transfer_time_evolve_convergence_newest", 1; new = true)
-time_evolve_experiment("time_evolve_convergence_newest_batch1024", 1; batch_size = 1024)
-time_evolve_experiment("transfer_time_evolve_convergence_newest_batch1024", 1; batch_size = 1024, new = true)
+# time_evolve_experiment = experiment(10:2:18, J, -2.0:1.0:-1.0, 0.0:0.1:1.0, 10000)
+# 
+# time_evolve_experiment("time_evolve_convergence_newest", 1)
+# time_evolve_experiment("transfer_time_evolve_convergence_newest", 1; new = true)
+# time_evolve_experiment("time_evolve_convergence_newest_batch1024", 1; batch_size = 1024)
+# time_evolve_experiment("transfer_time_evolve_convergence_newest_batch1024", 1; batch_size = 1024, new = true)
 
 #sample_experiment()
 #transfer_sample_experiment()

@@ -115,7 +115,7 @@ Flux.@functor GeneralTransformer
 
 function train(model, input...;
     learning_rate = 1e-4,
-    num_steps = 10000,
+    max_epochs = 10000,
     batch_size = 128,
     test_fraction = 0.1,
     validation_fraction = 0.1,
@@ -155,10 +155,10 @@ function train(model, input...;
     test_losses = []
     min_epoch = 0
 
-    epochs = 1:num_steps
+    epochs = 1:max_epochs
     progress = nothing
     if progress_bar
-        progress = Progress(num_steps; dt=1.0)
+        progress = Progress(max_epochs; dt=1.0)
     end
     for epoch in epochs
         accumulated_loss = 0

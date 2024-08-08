@@ -58,13 +58,13 @@ function (exp::experiment)(name="nameless_exp", version=1;kwargs...)
             save_models(entropy, conditional_entropy, c...)
         catch e
             if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
-            @warn "Failed to save models: " * e.msg
+            @warn "Failed to save models: " * str
         end
         try
            output_csv(entropy, conditional_entropy, c...; kwargs...)
         catch e
             if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
-            @warn "Failed to save csv: " * e.msg
+            @warn "Failed to save csv: " * str
         end
         try
             save_plots(entropy, conditional_entropy, c...)
@@ -74,7 +74,7 @@ function (exp::experiment)(name="nameless_exp", version=1;kwargs...)
         end
     catch e
         if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
-        @warn "Failed to compute mutual information: " * e.msg
+        @warn "Failed to compute mutual information: " * str
     end
     end
 end

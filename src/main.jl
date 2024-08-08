@@ -2,8 +2,8 @@ using Pkg
 Pkg.activate(".")
 
 include("./transformer.jl")
-include("./gen_samples.jl")
-include("./read_wvfct.jl")
+include("./read_npy_wavefunctions.jl")
+#include("./read_wvfct.jl")
 using Plots
 using BSON
 using CSV
@@ -104,8 +104,8 @@ function mutualinformation(X,Y; new = false, kwargs...)
     a = train(model, X; kwargs...)
     conditional_model = GeneralTransformer(a_input_dim = a_input_dim, b_input_dim = b_input_dim)
     if new
-        first_mha = deepcopy(Flux.params(model.decoder.blocks.:(1).attention))
-        Flux.loadparams!(conditional_model.decoder.blocks.:(1).attention, first_mha)
+        first_mha = deepcopy(Flux.params(model.a_embed))
+        Flux.loadparams!(conditional_model.a_embed, first_mha)
     end
     b = train(conditional_model, X, Y; kwargs...) 
     return a, b
@@ -146,29 +146,24 @@ end
 
 
 
-L = 12
+L = 20
 J = -1
 g = -1.0 # can be anything from [-0.5,-1.0,-2.0]
 t = 0.1   # can be anything from collect(0:0.001:1)
 
-#test = experiment(L, J, g, 1.0, 100)
-#test("test", 1)
+# test = experiment(L, J, g, 0.1, 100)
+# test("test", 1, new = true)
 
-# sample_experiment = experiment(L, J, g, 0.1:0.9:1.0, (2^x for x=4:16))
-# sample_experiment("sample_convergence_newest", 1; )
-# sample_experiment("transfer_sample_convergence_newest", 1; new = true)
-# sample_experiment("sample_convergence_newest_batch256", 1; batch_size = 256)
-# sample_experiment("sample_convergence_newest_batch512", 1; batch_size = 512)
-# sample_experiment("sample_convergence_newest_batch1024", 1; batch_size = 1024)
-# sample_experiment("transfer_sample_convergence_newest_batch1024", 1; batch_size = 1024, new = true)
+sample_experiment = experiment(L, J, g, 0.1:0.9:1.0, (2^x for x=9:16))
+sample_experiment("sample_convergence_large_batch128", 1; )
+sample_experiment("transfer_sample_convergence_large_batch128", 1; new = true)
+sample_experiment("sample_convergence_large_batch256", 1; batch_size = 256)
+sample_experiment("sample_convergence_large_batch512", 1; batch_size = 512)
+sample_experiment("sample_convergence_large_batch1024", 1; batch_size = 1024)
+sample_experiment("transfer_sample_convergence_large_batch1024", 1; batch_size = 1024, new = true)
 
-time_evolve_experiment = experiment(10:2:18, J, -2.0:1.0:-1.0, 0.0:0.1:1.0, 10000)
-
-time_evolve_experiment("time_evolve_convergence_newest", 1)
-time_evolve_experiment("transfer_time_evolve_convergence_newest", 1; new = true)
-time_evolve_experiment("time_evolve_convergence_newest_batch1024", 1; batch_size = 1024)
-time_evolve_experiment("transfer_time_evolve_convergence_newest_batch1024", 1; batch_size = 1024, new = true)
-#sample_experiment()
-#transfer_sample_experiment()
-#time_evolve_experiment()
+#time_evolve_experiment = experiment(20, J, g, 0.0:0.05:1.0, 10000)
+#
+#time_evolve_experiment("time_evolve_convergence_large_batch256", 1, batch_size = 256)
+#time_evolve_experiment("transfer_time_evolve_convergence_large_batch256", 1; new = true, batch_size = 256)
 

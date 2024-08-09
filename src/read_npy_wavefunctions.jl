@@ -1,5 +1,5 @@
 using NPZ
-
+using Random
 function read_wavefunction(L, J, g, t)
   path = "data/inputs/" 
   name = path * "ising_critical.npy"

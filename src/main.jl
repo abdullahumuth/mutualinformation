@@ -91,7 +91,7 @@ function inputhandler(L,J,g,t,num_samples)
     x[2, :, :] .= 1 .- x_proto
     x = Int.(x) |> gpu
 
-    y = fake_y(L; unit=1, offset=0, partition=1)
+    y = fake_y(L; unit=0.5, offset=0, partition=2)
     #y = stack(map(x -> [real(psi[x]), imag(psi[x])], indices))
     y = reshape(y, (1, size(y)...)) |> gpu
 

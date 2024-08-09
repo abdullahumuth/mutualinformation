@@ -8,7 +8,7 @@ function read_wavefunction(L, J, g, t)
 end
 
 
-function fake_y(n; unit=1, offset=0, partition=1)
+function fake_y(n; unit=1, offset=10, partition=1)
   f(x) = [div((x-1),sqrt(2^n))*unit,((x-1) % sqrt(2^n))*unit] .+ unit*(-2^(n/2-1) .+ 1/2)
   shuffled = Random.randperm(MersenneTwister(111), 2^n)
   if partition == 1

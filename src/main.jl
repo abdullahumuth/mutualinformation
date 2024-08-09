@@ -91,7 +91,8 @@ function inputhandler(L,J,g,t,num_samples)
     x[2, :, :] .= 1 .- x_proto
     x = Int.(x) |> gpu
 
-    y = stack(map(x -> [real(psi[x]), imag(psi[x])], indices))
+    y = fake_y(L; unit=1, offset=0, partition=1)
+    #y = stack(map(x -> [real(psi[x]), imag(psi[x])], indices))
     y = reshape(y, (1, size(y)...)) |> gpu
 
     return x, y
@@ -154,6 +155,7 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 # test = experiment(L, J, g, 0.1, 100)
 # test("test", 1, new = true)
 
+
 # sample_experiment = experiment(L, J, g, 0.1:0.9:1.0, (2^x for x=9:16))
 # sample_experiment("sample_convergence_large_batch128", 1; )
 # sample_experiment("transfer_sample_convergence_large_batch128", 1; new = true)
@@ -162,8 +164,14 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 # sample_experiment("sample_convergence_large_batch1024", 1; batch_size = 1024)
 # sample_experiment("transfer_sample_convergence_large_batch1024", 1; batch_size = 1024, new = true)
 
-time_evolve_experiment = experiment(20, J, g, 0.0:0.05:1.0, 10000)
+# time_evolve_experiment = experiment(20, J, g, 0.0:0.05:1.0, 10000)
+# 
+# time_evolve_experiment("time_evolve_convergence_large_batch256", 1, batch_size = 256)
+# time_evolve_experiment("transfer_time_evolve_convergence_large_batch256", 1; new = true, batch_size = 256)
 
-time_evolve_experiment("time_evolve_convergence_large_batch256", 1, batch_size = 256)
-time_evolve_experiment("transfer_time_evolve_convergence_large_batch256", 1; new = true, batch_size = 256)
+
+
+moment_of_truth = experiment(L, J, g, 0.0, (2^x for x=9:16))
+moment_of_truth("moment_of_truth_batch256", 2; batch_size = 256)
+moment_of_truth("moment_of_truth_batch256_transfer", 1; new = true, batch_size = 256)
 

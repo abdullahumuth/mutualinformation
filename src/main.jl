@@ -172,6 +172,6 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 
 
 moment_of_truth = experiment(L, J, g, 0.0, (2^x for x=9:16))
-moment_of_truth("moment_of_truth_batch256", 2; batch_size = 256)
-moment_of_truth("moment_of_truth_batch256_transfer", 1; new = true, batch_size = 256)
+moment_of_truth("moment_of_truth_batch256_2partition", 2; batch_size = 256)
+moment_of_truth("moment_of_truth_batch256_transfer_2partition", 1; new = true, batch_size = 256)
 

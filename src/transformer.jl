@@ -161,7 +161,7 @@ function train(model, input...;
     if progress_bar
         progress = Progress(max_epochs; dt=1.0)
     end
-    early_stopper = Flux.early_stopping(()->test_losses[end], 100; init_score = Inf)
+    early_stopper = Flux.early_stopping(()->test_losses[end], 500; init_score = Inf)
     for epoch in epochs
         accumulated_loss = 0
         for inp in loader

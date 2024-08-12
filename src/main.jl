@@ -52,7 +52,7 @@ function (exp::experiment)(name="nameless_exp", version=1;kwargs...)
 
     for L in exp.L, J in exp.J, g in exp.g, t in exp.t, num_samples in exp.num_samples
         c = name, L, J, g, t, num_samples
-    try
+    #try
         entropy, conditional_entropy = mutualinformation(inputhandler(c[2:end]...)...; kwargs...)
         try
             save_models(entropy, conditional_entropy, c...)
@@ -72,16 +72,19 @@ function (exp::experiment)(name="nameless_exp", version=1;kwargs...)
             if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
             @warn "Failed to save plots: " * str
         end
-    catch e
-        if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
-        @warn "Failed to compute mutual information: " * str
-    end
+    #catch e
+    #    if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
+    #    @warn "Failed to compute mutual information: " * str
+    #end
     end
 end
 
 function inputhandler(L,J,g,t,num_samples)
-    psi = read_wavefunction(L, J, g, t)
-    dist = Categorical(abs2.(psi))
+    #psi = read_wavefunction(L, J, g, t)
+    #dist = Categorical(abs2.(psi))
+
+    dist = DiscreteUniform(1, 2^L)
+
     indices = rand(dist, num_samples)
     f(x) = digits(x, base=2, pad = L)|> reverse
     x_proto = stack(map(f, indices .- 1))
@@ -91,10 +94,11 @@ function inputhandler(L,J,g,t,num_samples)
     x[2, :, :] .= 1 .- x_proto
     x = Int.(x) |> gpu
 
-    y = fake_y(L; unit=1, offset=10, partition=4)
-    #y = stack(map(x -> [real(psi[x]), imag(psi[x])], indices))
-    y = reshape(y, (1, size(y)...)) |> gpu
+    y = fake_y(L; unit=1, offset=10, partition=4)[:, indices]
 
+    #y = stack(map(x -> [real(psi[x]), imag(psi[x])], indices))
+    
+    y = reshape(y, (1, size(y)...)) |> gpu
     return x, y
 end
 
@@ -171,6 +175,6 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 
 
 
-moment_of_truth = experiment(L, J, g, 0.0, (2^x for x=9:16))
+moment_of_truth = experiment(L, J, g, 0.0, (2^x for x=4:6))
 moment_of_truth("moment_of_truth_batch256_4partition", 1; batch_size = 256)
 

@@ -84,8 +84,8 @@ function inputhandler(L,J,g,t,num_samples)
     #dist = Categorical(abs2.(psi))
 
     dist = DiscreteUniform(1, 2^L)
-
-    indices = rand(dist, num_samples)
+    indices = randperm(MersenneTwister(303), 2^L)[1:num_samples]
+    #indices = rand(MersenneTwister(303), dist, num_samples)
     f(x) = digits(x, base=2, pad = L)|> reverse
     x_proto = stack(map(f, indices .- 1))
 
@@ -170,7 +170,7 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 
 time_evolve_experiment = experiment(20, J, g, 0.0:0.05:1.0, 10000)
 
-time_evolve_experiment("uniform_time_evolve_l20_batch128", 1, batch_size = 128)
+time_evolve_experiment("unique_uniform_time_evolve_l20_batch128", 1, batch_size = 128)
 # time_evolve_experiment("transfer_time_evolve_convergence_large_batch256", 1; new = true, batch_size = 256)
 
 

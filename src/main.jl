@@ -80,7 +80,7 @@ function (exp::experiment)(name="nameless_exp", version=1;kwargs...)
 end
 
 function inputhandler(L,J,g,t,num_samples)
-    #psi = read_wavefunction(L, J, g, t)
+    psi = read_wavefunction(L, J, g, t)
     #dist = Categorical(abs2.(psi))
 
     dist = DiscreteUniform(1, 2^L)
@@ -94,9 +94,9 @@ function inputhandler(L,J,g,t,num_samples)
     x[2, :, :] .= 1 .- x_proto
     x = Int.(x) |> gpu
 
-    y = fake_y(L; unit=1, offset=10, partition=1)[:, indices]
+    #y = fake_y(L; unit=1, offset=10, partition=1)[:, indices]
 
-    #y = stack(map(x -> [real(psi[x]), imag(psi[x])], indices))
+    y = stack(map(x -> [real(psi[x]), imag(psi[x])], indices))
 
     y = reshape(y, (1, size(y)...)) |> gpu
     return x, y
@@ -160,8 +160,8 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 # test("test", 1, new = true)
 
 
-# sample_experiment = experiment(L, J, g, 0.1:0.9:1.0, (2^x for x=9:16))
-# sample_experiment("sample_convergence_large_batch128", 1; )
+sample_experiment = experiment(L, J, g, 0.5:0.5:1.0, (2^x for x=9:16))
+sample_experiment("sample_convergence_large_batch128", 1; )
 # sample_experiment("transfer_sample_convergence_large_batch128", 1; new = true)
 # sample_experiment("sample_convergence_large_batch256", 1; batch_size = 256)
 # sample_experiment("sample_convergence_large_batch512", 1; batch_size = 512)
@@ -175,6 +175,6 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 
 
 
-moment_of_truth = experiment(L, J, g, 0.0, (2^x for x=9:16))
-moment_of_truth("moment_of_truth_batch128_1partition", 1; batch_size = 128)
+# moment_of_truth = experiment(L, J, g, 0.0, (2^x for x=9:16))
+# moment_of_truth("moment_of_truth_batch128_1partition", 1; batch_size = 128)
 

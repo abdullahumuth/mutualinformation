@@ -97,7 +97,7 @@ function inputhandler(L,J,g,t,num_samples)
     y = fake_y(L; unit=1, offset=10, partition=4)[:, indices]
 
     #y = stack(map(x -> [real(psi[x]), imag(psi[x])], indices))
-    
+
     y = reshape(y, (1, size(y)...)) |> gpu
     return x, y
 end
@@ -175,6 +175,6 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 
 
 
-moment_of_truth = experiment(L, J, g, 0.0, (2^x for x=4:6))
-moment_of_truth("moment_of_truth_batch256_4partition", 1; batch_size = 256)
+moment_of_truth = experiment(L, J, g, 0.0, (2^x for x=9:16))
+moment_of_truth("moment_of_truth_batch128_4partition", 1; batch_size = 128)
 

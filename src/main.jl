@@ -161,7 +161,7 @@ t = 0.1   # can be anything from collect(0:0.001:1)
 
 
 sample_experiment = experiment(L, J, g, 0.5:0.5:1.0, (2^x for x=9:16))
-sample_experiment("sample_convergence_large_batch128", 1; )
+sample_experiment("uniform_sample_convergence_l20_batch128", 1; )
 # sample_experiment("transfer_sample_convergence_large_batch128", 1; new = true)
 # sample_experiment("sample_convergence_large_batch256", 1; batch_size = 256)
 # sample_experiment("sample_convergence_large_batch512", 1; batch_size = 512)

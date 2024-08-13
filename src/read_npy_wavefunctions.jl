@@ -10,7 +10,9 @@ end
 
 function fake_y(n; unit=1, offset=10, partition=1)
   f(x) = [div((x-1),sqrt(2^n))*unit,((x-1) % sqrt(2^n))*unit] .+ unit*(-2^(n/2-1) .+ 1/2)
-  shuffled = Random.randperm(MersenneTwister(111), 2^n)
+  
+  shuffled = invperm(sort(1:2^n, lt=compare_integers))
+  #Random.randperm!(MersenneTwister(111), shuffled)
   if partition == 1
     straight = stack(map(f, 1:2^n))
     g = straight[:,shuffled]
@@ -28,4 +30,16 @@ function fake_y(n; unit=1, offset=10, partition=1)
 
   g = g./sqrt(sum((x)->x^2,g))
   return g
+end
+
+function compare_integers(a::Integer, b::Integer)
+  sum_a = count_ones(a-1)
+  sum_b = count_ones(b-1)
+  if sum_a == sum_b
+      return false
+  elseif sum_a > sum_b
+      return true
+  else
+      return false
+  end
 end

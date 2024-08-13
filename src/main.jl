@@ -52,7 +52,7 @@ function (exp::experiment)(name="nameless_exp", version=1;kwargs...)
 
     for L in exp.L, J in exp.J, g in exp.g, t in exp.t, num_samples in exp.num_samples
         c = name, L, J, g, t, num_samples
-    #try
+    try
         entropy, conditional_entropy = mutualinformation(inputhandler(c[2:end]...)...; kwargs...)
         try
             save_models(entropy, conditional_entropy, c...)
@@ -72,10 +72,10 @@ function (exp::experiment)(name="nameless_exp", version=1;kwargs...)
             if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
             @warn "Failed to save plots: " * str
         end
-    #catch e
-    #    if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
-    #    @warn "Failed to compute mutual information: " * str
-    #end
+    catch e
+        if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
+        @warn "Failed to compute mutual information: " * str
+    end
     end
 end
 

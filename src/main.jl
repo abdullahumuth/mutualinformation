@@ -81,11 +81,11 @@ end
 
 function inputhandler(L,J,g,t,num_samples)
     psi = read_wavefunction(L, J, g, t)
-    dist = Categorical(abs2.(psi))
+    #dist = Categorical(abs2.(psi))
 
     #dist = DiscreteUniform(1, 2^L)
-    #indices = randperm(MersenneTwister(303), 2^L)[1:num_samples]
-    indices = rand(MersenneTwister(303), dist, num_samples)
+    indices = randperm(MersenneTwister(303), 2^L)[1:num_samples]
+    #indices = rand(MersenneTwister(303), dist, num_samples)
     f(x) = digits(x, base=2, pad = L)|> reverse
     x_proto = stack(map(f, indices .- 1))
 

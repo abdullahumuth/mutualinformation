@@ -1,10 +1,10 @@
 include("./main.jl")
 
-name = "ER_improved_sample_convergence_l20_batch128"
+name = "to_the_bitter_end_unique_sample_convergence_l20_batch128"
 version = 1
 
-experiment1 = experiment(L, J, g, 0.1:0.85:0.95, (2^x for x=9:16))
-experiment1(name, version; )
+experiment1 = experiment(L, J, g, 0.5, (2^x for x=11:20))
+experiment1(name, version; test_fraction=0.4)
 
 
 

@@ -84,9 +84,9 @@ function inputhandler(L,J,g,t,num_samples)
     psi = read_wavefunction(L, J, g, t)
     #dist = Categorical(abs2.(psi))
 
-    #dist = DiscreteUniform(1, 2^L)
-    indices = randperm(MersenneTwister(303), 2^L)[1:num_samples]
-    #indices = rand(MersenneTwister(303), dist, num_samples)
+    dist = DiscreteUniform(1, 2^L)
+    #indices = randperm(MersenneTwister(303), 2^L)[1:num_samples]
+    indices = rand(MersenneTwister(303), dist, num_samples)
     f(x) = digits(x, base=2, pad = L)|> reverse
     x_proto = stack(map(f, indices .- 1))
 
@@ -95,9 +95,9 @@ function inputhandler(L,J,g,t,num_samples)
     x[2, :, :] .= 1 .- x_proto
     x = Int.(x) |> gpu
 
-    #y = fake_y(L; unit=1, offset=16, partition=2)[:, indices]
+    y = fake_y(L; unit=1, offset=16, partition=2)[:, indices]
 
-    y = stack(map(x -> [real(psi[x]), imag(psi[x])], indices))
+    #y = stack(map(x -> [real(psi[x]), imag(psi[x])], indices))
 
     y = reshape(y, (1, size(y)...)) |> gpu
     return x, y

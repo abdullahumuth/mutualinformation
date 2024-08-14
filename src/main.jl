@@ -41,7 +41,7 @@ function mkdir_safe(path)
     try mkdir(path) catch e @warn "Probably file already exists: " * e.msg end
 end
 
-function (exp::experiment)(name="nameless_exp", version=1;kwargs...)
+function (exp::experiment)(name="nameless_exp", version=1; uniform=false, unique=false, fake=false, shuffle=false, kwargs...)
     name = "$(name)_v$(version)"
 
     mkdir_safe("data/outputs/$(name)")
@@ -54,7 +54,9 @@ function (exp::experiment)(name="nameless_exp", version=1;kwargs...)
         c = name, L, J, g, t, num_samples
         println("Running experiment with parameters: ", c)
     try
-        entropy, conditional_entropy = mutualinformation(inputhandler(c[2:end]...)...; kwargs...)
+
+
+        entropy, conditional_entropy = mutualinformation(inputhandler(c[2:end]...; uniform=uniform, unique=unique, fake=fake, shuffle=shuffle)...; kwargs...)
         try
             save_models(entropy, conditional_entropy, c...)
         catch e
@@ -80,13 +82,19 @@ function (exp::experiment)(name="nameless_exp", version=1;kwargs...)
     end
 end
 
-function inputhandler(L,J,g,t,num_samples)
+function inputhandler(L,J,g,t,num_samples; uniform = false, unique = false, fake = false, shuffle=false)
     psi = read_wavefunction(L, J, g, t)
-    #dist = Categorical(abs2.(psi))
+    if unique
+        indices = randperm(MersenneTwister(303), 2^L)[1:num_samples]
+    else
+        if uniform
+            dist = DiscreteUniform(1, 2^L)
+        else
+            dist = Categorical(abs2.(psi))
+        end
+        indices = rand(MersenneTwister(303), dist, num_samples)
+    end
 
-    #dist = DiscreteUniform(1, 2^L)
-    indices = randperm(MersenneTwister(303), 2^L)[1:num_samples]
-    #indices = rand(MersenneTwister(303), dist, num_samples)
     f(x) = digits(x, base=2, pad = L)|> reverse
     x_proto = stack(map(f, indices .- 1))
 
@@ -95,9 +103,12 @@ function inputhandler(L,J,g,t,num_samples)
     x[2, :, :] .= 1 .- x_proto
     x = Int.(x) |> gpu
 
-    y = fake_y(L; unit=1, offset=16, partition=2)[:, indices]
 
-    #y = stack(map(x -> [real(psi[x]), imag(psi[x])], indices))
+    if fake
+        y = fake_y(L; unit=1, offset=16, partition=2, shuffle=shuffle)[:, indices]
+    else
+        y = stack(map(x -> [real(psi[x]), imag(psi[x])], indices))
+    end
 
     y = reshape(y, (1, size(y)...)) |> gpu
     return x, y

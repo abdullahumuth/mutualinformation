@@ -1,6 +1,7 @@
 include("./main.jl")
 
-name = "ER_improved_moment_of_truth_batch128_4partition"
-version = 1
-experiment4 = experiment(L, J, g, 0.0:1.0:1.0, (2^x for x=9:16))
-experiment4(name, version; )
+name = "magnetization_moment_of_truth_2partition_l20_batch128"
+version = 3
+
+experiment2 = experiment(L, J, g, 0.5, (2^x for x=10:16))
+experiment2(name, version; uniform=true, fake=true, shuffle=false)

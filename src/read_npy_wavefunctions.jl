@@ -11,8 +11,8 @@ end
 function fake_y(n; unit=1, offset=10, partition=1, magnetization=true, shuffle=true)
   f(x) = [div((x-1),sqrt(2^n))*unit,((x-1) % sqrt(2^n))*unit] .+ unit*(-2^(n/2-1) .+ 1/2)
   
-  magnetization && shuffled = invperm(sort(1:2^n, lt=compare_integers))
-  shuffle && Random.randperm!(MersenneTwister(111), shuffled)
+  magnetization && (shuffled = invperm(sort(1:2^n, lt=compare_integers)))
+  shuffle && (Random.randperm!(MersenneTwister(111), shuffled))
   if partition == 1
     straight = stack(map(f, 1:2^n))
     g = straight[:,shuffled]

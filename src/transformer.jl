@@ -129,7 +129,7 @@ function (m::GeneralTransformer)(x; discrete = true)
         # dimensions are (gaussian_num, 3, seq_len, batch_size)
         gm_params = reshape(h, (:, 3, size(x)[end-1:end]...))
         log_probs = log_gaussian_mix(gm_params, x)
-        h = reshape(sum(log_probs, dims=2), (:))
+        h = -reshape(sum(log_probs, dims=2), (:))
     end
     return h
 end
@@ -148,7 +148,7 @@ function (m::GeneralTransformer)(x, y; discrete = true)
     else 
         gm_params = reshape(h, (:, 3, size(x)[end-1:end]...))
         log_probs = log_gaussian_mix(gm_params, x)
-        h = reshape(sum(log_probs, dims=2), (:))
+        h = -reshape(sum(log_probs, dims=2), (:))
     end
     return h
 end

@@ -1,7 +1,7 @@
 include("./main.jl")
 
 name = "continuous_sample_test"
-version = 1
+version = 2
 
 experiment1 = experiment(L, J, g, 0.5, (2^x for x=9:16))
 experiment1(name, version; gaussian_num = 32)

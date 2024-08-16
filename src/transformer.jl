@@ -118,7 +118,7 @@ end
 # after the final dense layer, we remove the prediction bit
 # then we calculate the cross entropy (I just want to calculate p(x), that's why I choose h when x = 1 and 1-h when x = 0)
 # we will need the sum of the logarithms of the probabilities, that would be the -log likelihood.
-function (m::GeneralTransformer)(x, discrete = true)
+function (m::GeneralTransformer)(x; discrete = true)
     padded_x = pad_constant(x, (0,0,1,0,0,0), padding_constant) 
     h = decoder_forward(m, padded_x)
     h = m.final_dense(h)
@@ -136,7 +136,7 @@ end
 
 
 #conditional probability
-function (m::GeneralTransformer)(x, y, discrete = true)
+function (m::GeneralTransformer)(x, y; discrete = true)
     
     padded_x = pad_constant(x, (0,0,1,0,0,0), padding_constant)
     encoded = encoder_forward(m,y)
@@ -218,7 +218,7 @@ function train(model, input...;
         for inp in loader
             (epoch + 1) % 100 == 0 && (t1 = time()) 
             loss, grads = Flux.withgradient(model) do m
-                sum(m(inp..., discrete = discrete))
+                sum(m(inp...; discrete = discrete))
             end
             accumulated_loss += loss
             Flux.update!(optim, model, grads[1])
@@ -229,7 +229,7 @@ function train(model, input...;
         end
         
         push!(losses, accumulated_loss / size(train_input[1])[end])
-        push!(test_losses, mean(model(test_input..., discrete = discrete)))
+        push!(test_losses, mean(model(test_input...; discrete = discrete)))
 
         if size(test_losses)[1]>1
             if min(test_losses[1:end-1]...) > test_losses[end]
@@ -247,7 +247,7 @@ function train(model, input...;
 
     Flux.loadparams!(model, optimal_params)
 
-    output = mean(model(validation_input..., discrete = discrete))
+    output = mean(model(validation_input...; discrete = discrete))
 
     length(times) > 1 && popfirst!(times)
 

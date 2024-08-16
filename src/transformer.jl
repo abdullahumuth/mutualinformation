@@ -6,8 +6,8 @@ using Transformers
 using Transformers.Layers
 using NeuralAttentionlib
 using ProgressMeter
+using Distributions
 using CUDA
-
 padding_constant = -1
 
 struct GeneralTransformer{P <: Transformers.Layers.AbstractEmbedding}
@@ -41,7 +41,7 @@ function GeneralTransformer(;
     end
 
     if b_input_dim != 0
-        b_embed = Dense(b_input_dim => embedding_dim)
+        b_embed = Chain(Dense(b_input_dim => ffn_dim), Dense(ffn_dim => embedding_dim))
         decoder = Transformer(PreNormTransformerDecoderBlock, layer_num, head_num, embedding_dim, head_dim, ffn_dim)
         encoder = Transformer(PreNormTransformerBlock, layer_num, head_num, embedding_dim, head_dim, ffn_dim)
     else
@@ -113,6 +113,35 @@ function log_gaussian_mix(ps, x)
     return logsumexp(gvals, dims=1)
 
 end
+
+function generate_samples(m, input_dim, seq_len, num_samples, y; discrete = true)
+    if discrete
+        x  = zeros((input_dim, seq_len, num_samples)) |> gpu
+        for i in 1:seq_len
+            if !isnothing(y)
+                encoded = encoder_forward(m, y)
+                h = cross_attend(m, x, encoded)
+            else
+                h = decoder_forward(m, x)
+            end
+            h = m.final_dense(h)
+            h = h[:,i,:]
+            h = softmax(h)
+            h = cpu(h)
+            h = mapslices(x->rand(Categorical(x)), h, dims=1)
+            h = gpu(h)
+            h = reshape(Flux.onehotbatch(h, 1:input_dim), (input_dim, num_samples))
+            x[:,i,:] = h
+        end
+        println(size(x))
+        return x
+    else
+        throw(ArgumentError("Not implemented")) # no gaussians yet!
+    end
+end
+
+
+
 # we pad to be able to calculate the unconditional probability
 # with the final dense layer we calculate the probability of the next token == 1 (with 1d sigmoid input)
 # after the final dense layer, we remove the prediction bit

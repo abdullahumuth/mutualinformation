@@ -54,8 +54,8 @@ function (exp::experiment)(name="nameless_exp", version=1; gaussian_num=0, unifo
         c = name, L, J, g, t, num_samples
         println("Running experiment with parameters: ", c)
     #try
-
         entropy, conditional_entropy = mutualinformation(inputhandler(c[2:end]...; discrete = (gaussian_num==0), uniform=uniform, unique=unique, fake=fake, shuffle=shuffle)...; gaussian_num = gaussian_num, kwargs...)
+        
         try
             save_models(entropy, conditional_entropy, c...)
         catch e
@@ -161,6 +161,62 @@ function save_plots(a,b,c...)
     savefig(plot_models(a,b), "data/outputs/$(c[1])/plots/" * name_files(c...) * ".png")
 end
 
+function generator(input_dim=2, seq_len=20, num_samples=10000;conditional=true)
+    if conditional
+        m = GeneralTransformer(a_input_dim = 2, b_input_dim = 1)
+        y = 2 .* rand(2, num_samples) .- 1
+        y = reshape(y, (1, size(y)...)) |> gpu
+        x = generate_samples(m, input_dim, seq_len, num_samples, y) |> gpu
+        return (model = m, data = (x, y))
+    else
+        m = GeneralTransformer(a_input_dim = 2)
+        x = generate_samples(m, input_dim, seq_len, num_samples, nothing) |> gpu
+        return (model = m, data = (x,))
+    end
+end
+
+function load_generated_data(name)
+    csvv = CSV.read("data/outputs/$(name)/data/generated_" * name * ".csv")
+    m = BSON.load("data/outputs/$(name)/models/generated_" * name * ".bson")
+    return (model = m, data = data)
+end
+
+
+function evaluate(model, x, y; discrete = true)
+    if isnothing(y)
+        return mean(model(x; discrete = discrete)), (net = model,)
+    end
+    return mean(model(x, y; discrete = discrete)), (net = model,)
+    
+end
+
+function generation_experiment(name, input_dim = 2, seq_len = 20, num_samples = 10000; generate = true, conditional = true, kwargs...)
+    if generate
+        m = generator(input_dim, seq_len, num_samples; conditional = conditional)
+    else
+        m = load_generated_data(name)
+    end
+    if conditional
+        a = evaluate(m.model, m.data...; kwargs...)
+        data = DataFrame(:x_dim => input_dim, :x_len => seq_len, :y_dim => size(m.data[2])[1], :y_len => size(m.data[2])[2], :num_samples => num_samples, :x => reshape(m.data[1], (:)), :y => reshape(m.data[2], (:)))
+        model_name = "conditional_entropy"
+    else
+        a = evaluate(m.model, m.data.x, nothing; kwargs...)
+        data = DataFrame(:x_dim => input_dim, :x_len => x_len, :num_samples => num_samples, :x => reshape(m.data, (:)))
+        model_name = "entropy"
+    end
+    mkdir_safe("data/outputs/$(name)")
+    mkdir_safe("data/outputs/$(name)/models")
+    mkdir_safe("data/outputs/$(name)/results")
+    mkdir_safe("data/outputs/$(name)/data")
+    let 
+        model = cpu(a[2].net)
+        bson("data/outputs/$(name)/models/generated_" * name * ".bson", model_name = model)
+    end
+    CSV.write("data/outputs/$(name)/data/generated_" * name * ".csv", data)
+    result = DataFrame(Symbol(model_name) => a[1])
+    CSV.write("data/outputs/$(name)/results/generated_" * name * ".csv", result)
+end
 
 
 L = 20

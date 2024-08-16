@@ -1,8 +1,8 @@
 include("./main.jl")
 
-name = "continuous_sample_test_t0"
-version = 1
+name = "ER_improved_unique_uniform_time_series_l20_batch128"
+name = "customizable_unique_uniform_time_series_l20_batch128"
+version = 4
 
-experiment3 = experiment(L, J, g, 0.0, (2^x for x=9:16))
-experiment3(name, version; gaussian_num = 32)
-
+experiment3 = experiment(L, J, g, 0.0:0.05:0.95, 10000)
+experiment3(name, version; unique = true, uniform = true)

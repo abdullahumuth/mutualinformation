@@ -1,5 +1,4 @@
 include("./main.jl")
 
-name = "generate_samples_first"
 
-generation_experiment(name, 2, 20, 100; generate = true, conditional = true)
+generation_experiment("production_generation", 2, 20, 2^16; get_data_from = "", conditional = true)

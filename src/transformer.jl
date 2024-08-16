@@ -86,7 +86,6 @@ end
 function decoder_forward(m::GeneralTransformer, input)
     e = embedding(m, input)
     t = m.decoder(e, m.attention_mask)
-    #println("shape of hidden state: ", size(t.hidden_state))
     return t.hidden_state
 end
 
@@ -133,7 +132,6 @@ function generate_samples(m, input_dim, seq_len, num_samples, y; discrete = true
             h = reshape(Flux.onehotbatch(h, 1:input_dim), (input_dim, num_samples))
             x[:,i,:] = h
         end
-        println(size(x))
         return x
     else
         throw(ArgumentError("Not implemented")) # no gaussians yet!
@@ -196,9 +194,6 @@ function train(model, input...;
 
     discrete = true
     (size(model.a_embed.:weight)[2] == 1) && (size(model.final_dense.:weight)[1] != 1) && (discrete = false)
-    println("inputdim: ", size(model.a_embed.:weight)[2])
-    println("outputdim: ", size(model.final_dense.:weight)[1])
-    println("Discrete: ", discrete)
 
     Random.seed!(seed)
 
@@ -212,14 +207,11 @@ function train(model, input...;
     
     if length(input) == 2
         X, Y = input
-        println("X: ", size(X))
-        println("Y: ", size(Y))
         train_input = X[:,:,1:num_train] , Y[:,:,1:num_train]
         test_input = X[:,:,num_train+1:num_train+num_test], Y[:,:,num_train+1:num_train+num_test]
         validation_input = X[:,:,num_train+num_test+1:end], Y[:,:,num_train+num_test+1:end]
     else
         X = input[1]
-        println("X: ", size(X))
         train_input = (X[:,:,1:num_train],)
         test_input = (X[:,:,num_train+1:num_train+num_test],)
         validation_input = (X[:,:,num_train+num_test+1:end],)

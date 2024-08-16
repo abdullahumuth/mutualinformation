@@ -9,6 +9,7 @@ using BSON
 using CSV
 using DataFrames
 using Distributions
+using HDF5
 
 struct experiment
     L::Union{AbstractRange, Base.Generator}
@@ -161,18 +162,35 @@ function save_plots(a,b,c...)
     savefig(plot_models(a,b), "data/outputs/$(c[1])/plots/" * name_files(c...) * ".png")
 end
 
-function generator(input_dim=2, seq_len=20, num_samples=10000;conditional=true)
+function generator(name, input_dim=2, seq_len=20, num_samples=10000;conditional=true)
     if conditional
         m = GeneralTransformer(a_input_dim = 2, b_input_dim = 1)
         y = 2 .* rand(2, num_samples) .- 1
         y = reshape(y, (1, size(y)...)) |> gpu
         x = generate_samples(m, input_dim, seq_len, num_samples, y) |> gpu
-        return (model = m, data = (x, y))
+        output = (x, y)
+        model_name = "conditional"
     else
         m = GeneralTransformer(a_input_dim = 2)
         x = generate_samples(m, input_dim, seq_len, num_samples, nothing) |> gpu
-        return (model = m, data = (x,))
+        output = (x,)
+        model_name = "unconditional"
     end
+    mkdir_safe("data/outputs/$(name)")
+    mkdir_safe("data/outputs/$(name)/models")
+    mkdir_safe("data/outputs/$(name)/data")
+    let 
+        model = cpu(m)
+        bson("data/outputs/$(name)/models/generated_" * name * ".bson", model_name = model)
+    end
+    h5open("data/outputs/$(name)/data/generated_" * name * ".h5", "w") do file
+        g = create_group(file, "data")
+        g["x"] = output[1]
+        if length(output) > 1
+            g["y"] = output[2]
+        end
+    end
+    return (model = m, data = data)
 end
 
 function load_generated_data(name)
@@ -184,13 +202,16 @@ end
 
 function evaluate(model, x, y; discrete = true)
     if isnothing(y)
-        return mean(model(x; discrete = discrete)), (net = model,)
+        return mean(model(x; discrete = discrete))
     end
-    return mean(model(x, y; discrete = discrete)), (net = model,)
+    return mean(model(x, y; discrete = discrete))
     
 end
 
 function generation_experiment(name, input_dim = 2, seq_len = 20, num_samples = 10000; generate = true, conditional = true, kwargs...)
+    mkdir_safe("data/outputs/$(name)")
+    mkdir_safe("data/outputs/$(name)/results")
+
     if generate
         m = generator(input_dim, seq_len, num_samples; conditional = conditional)
     else
@@ -198,23 +219,12 @@ function generation_experiment(name, input_dim = 2, seq_len = 20, num_samples = 
     end
     if conditional
         a = evaluate(m.model, m.data...; kwargs...)
-        data = DataFrame(:x_dim => input_dim, :x_len => seq_len, :y_dim => size(m.data[2])[1], :y_len => size(m.data[2])[2], :num_samples => num_samples, :x => reshape(m.data[1], (:)), :y => reshape(m.data[2], (:)))
         model_name = "conditional_entropy"
     else
         a = evaluate(m.model, m.data.x, nothing; kwargs...)
-        data = DataFrame(:x_dim => input_dim, :x_len => x_len, :num_samples => num_samples, :x => reshape(m.data, (:)))
         model_name = "entropy"
     end
-    mkdir_safe("data/outputs/$(name)")
-    mkdir_safe("data/outputs/$(name)/models")
-    mkdir_safe("data/outputs/$(name)/results")
-    mkdir_safe("data/outputs/$(name)/data")
-    let 
-        model = cpu(a[2].net)
-        bson("data/outputs/$(name)/models/generated_" * name * ".bson", model_name = model)
-    end
-    CSV.write("data/outputs/$(name)/data/generated_" * name * ".csv", data)
-    result = DataFrame(Symbol(model_name) => a[1])
+    result = DataFrame(Symbol(model_name) => a)
     CSV.write("data/outputs/$(name)/results/generated_" * name * ".csv", result)
 end
 

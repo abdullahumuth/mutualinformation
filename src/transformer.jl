@@ -12,7 +12,7 @@ padding_constant = -1
 
 struct GeneralTransformer{P <: Transformers.Layers.AbstractEmbedding}
     a_embed::Dense
-    b_embed::Union{Nothing, Dense}
+    b_embed::Union{Nothing, Dense, Chain}
     pos_embed::P
     final_dense::Dense
     decoder::Transformers.Layers.Transformer
@@ -158,7 +158,7 @@ function (m::GeneralTransformer)(x; discrete = true)
         # dimensions are (gaussian_num, 3, seq_len, batch_size)
         gm_params = reshape(h, (:, 3, size(x)[end-1:end]...))
         log_probs = log_gaussian_mix(gm_params, x)
-        h = -reshape(sum(log_probs, dims=2), (:))
+        h = -log2(exp(1)).*reshape(sum(log_probs, dims=2), (:))
     end
     return h
 end
@@ -177,7 +177,7 @@ function (m::GeneralTransformer)(x, y; discrete = true)
     else 
         gm_params = reshape(h, (:, 3, size(x)[end-1:end]...))
         log_probs = log_gaussian_mix(gm_params, x)
-        h = -reshape(sum(log_probs, dims=2), (:))
+        h = -log2(exp(1)).*reshape(sum(log_probs, dims=2), (:))
     end
     return h
 end

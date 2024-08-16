@@ -27,7 +27,19 @@ function GeneralTransformer(;
     layer_num::Integer = 2,
     ffn_dim::Integer = 128,
     a_input_dim::Integer = 2,
-    b_input_dim::Integer = 0,)
+    b_input_dim::Integer = 0,
+    gaussian_num::Integer = 0,)
+
+    if gaussian_num == 0
+        deembedding = Dense(embedding_dim => a_input_dim)
+    else
+        if a_input_dim != 1
+            throw(ArgumentError("a_input_dim must be 1 when using gaussian mixtures"))
+        end
+        println("gaussian_num: ", gaussian_num)
+        deembedding = Dense(embedding_dim => 3*gaussian_num)
+    end
+
     if b_input_dim != 0
         b_embed = Dense(b_input_dim => embedding_dim)
         decoder = Transformer(PreNormTransformerDecoderBlock, layer_num, head_num, embedding_dim, head_dim, ffn_dim)
@@ -42,7 +54,7 @@ function GeneralTransformer(;
         Dense(a_input_dim => embedding_dim) |> gpu,
         b_embed |> gpu,
         SinCosPositionEmbed(embedding_dim) |> gpu,
-        Dense(embedding_dim => a_input_dim) |> gpu,
+        deembedding |> gpu,
         decoder |> gpu,
         encoder |> gpu,
         NeuralAttentionlib.CausalMask())
@@ -84,30 +96,60 @@ function helper(x)
     return x
 end
 
+
+
+function log_weighted_gaussian(x, weight, μ, σ)
+    σ_sq = 1e-6+softplus(σ) #σ^2
+    return weight + ( -0.5 * (x - μ)^2 / σ_sq ) - 0.5*log(2*pi*σ_sq)
+end
+
+
+
+function log_gaussian_mix(ps, x)
+
+    log_weights = logsoftmax(ps[:,1,:,:])
+    gvals = log_weighted_gaussian.(x, log_weights, ps[:,2,:,:], ps[:,3,:,:])
+    
+    return logsumexp(gvals, dims=1)
+
+end
 # we pad to be able to calculate the unconditional probability
 # with the final dense layer we calculate the probability of the next token == 1 (with 1d sigmoid input)
 # after the final dense layer, we remove the prediction bit
 # then we calculate the cross entropy (I just want to calculate p(x), that's why I choose h when x = 1 and 1-h when x = 0)
 # we will need the sum of the logarithms of the probabilities, that would be the -log likelihood.
-function (m::GeneralTransformer)(x)
+function (m::GeneralTransformer)(x, discrete = true)
     padded_x = pad_constant(x, (0,0,1,0,0,0), padding_constant) 
     h = decoder_forward(m, padded_x)
     h = m.final_dense(h)
     h = h[:,1:end-1,:]
-    h = Flux.logitcrossentropy(h, x, agg = helper)
+    if discrete
+        h = Flux.logitcrossentropy(h, x, agg = helper)
+    else 
+        # dimensions are (gaussian_num, 3, seq_len, batch_size)
+        gm_params = reshape(h, (:, 3, size(x)[end-1:end]...))
+        log_probs = log_gaussian_mix(gm_params, x)
+        h = reshape(sum(log_probs, dims=2), (:))
+    end
     return h
 end
 
 
 #conditional probability
-function (m::GeneralTransformer)(x, y)
+function (m::GeneralTransformer)(x, y, discrete = true)
     
     padded_x = pad_constant(x, (0,0,1,0,0,0), padding_constant)
     encoded = encoder_forward(m,y)
     h = cross_attend(m, padded_x, encoded)
     h = m.final_dense(h)
     h = h[:,1:end-1,:]
-    h = Flux.logitcrossentropy(h, x, agg = helper)
+    if discrete
+        h = Flux.logitcrossentropy(h, x, agg = helper)
+    else 
+        gm_params = reshape(h, (:, 3, size(x)[end-1:end]...))
+        log_probs = log_gaussian_mix(gm_params, x)
+        h = reshape(sum(log_probs, dims=2), (:))
+    end
     return h
 end
 
@@ -123,6 +165,12 @@ function train(model, input...;
     progress_bar = false,
     auto_stop = true)
 
+    discrete = true
+    (size(model.a_embed.:weight)[2] == 1) && (size(model.final_dense.:weight)[1] != 1) && (discrete = false)
+    println("inputdim: ", size(model.a_embed.:weight)[2])
+    println("outputdim: ", size(model.final_dense.:weight)[1])
+    println("Discrete: ", discrete)
+
     Random.seed!(seed)
 
     # organize data
@@ -135,11 +183,14 @@ function train(model, input...;
     
     if length(input) == 2
         X, Y = input
+        println("X: ", size(X))
+        println("Y: ", size(Y))
         train_input = X[:,:,1:num_train] , Y[:,:,1:num_train]
         test_input = X[:,:,num_train+1:num_train+num_test], Y[:,:,num_train+1:num_train+num_test]
         validation_input = X[:,:,num_train+num_test+1:end], Y[:,:,num_train+num_test+1:end]
     else
         X = input[1]
+        println("X: ", size(X))
         train_input = (X[:,:,1:num_train],)
         test_input = (X[:,:,num_train+1:num_train+num_test],)
         validation_input = (X[:,:,num_train+num_test+1:end],)
@@ -167,7 +218,7 @@ function train(model, input...;
         for inp in loader
             (epoch + 1) % 100 == 0 && (t1 = time()) 
             loss, grads = Flux.withgradient(model) do m
-                sum(m(inp...))
+                sum(m(inp..., discrete = discrete))
             end
             accumulated_loss += loss
             Flux.update!(optim, model, grads[1])
@@ -178,7 +229,7 @@ function train(model, input...;
         end
         
         push!(losses, accumulated_loss / size(train_input[1])[end])
-        push!(test_losses, mean(model(test_input...)))
+        push!(test_losses, mean(model(test_input..., discrete = discrete)))
 
         if size(test_losses)[1]>1
             if min(test_losses[1:end-1]...) > test_losses[end]
@@ -196,7 +247,7 @@ function train(model, input...;
 
     Flux.loadparams!(model, optimal_params)
 
-    output = mean(model(validation_input...))
+    output = mean(model(validation_input..., discrete = discrete))
 
     length(times) > 1 && popfirst!(times)
 

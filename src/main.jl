@@ -85,7 +85,7 @@ end
 function inputhandler(L,J,g,t,num_samples; load = "", discrete=true, uniform = false, unique = false, fake = false, shuffle=false)
     if load != ""
         data = load_generated_data(load, num_samples)
-        discrete && (return data.data)
+        discrete && (return data.data |> gpu)
         throw(ArgumentError("Didn't implement non-discrete data loading yet"))
     end
     psi = read_wavefunction(L, J, g, t)
@@ -226,11 +226,13 @@ function generation_experiment(name, input_dim = 2, seq_len = 20, num_samples = 
     mkdir_safe("data/inputs/$(get_data_from)")
     mkdir_safe("data/inputs/$(get_data_from)/results")
 
+    gpu_model, gpu_data = m.model |> gpu, m.data |> gpu
+
     if conditional
-        a = evaluate(m.model, m.data...; kwargs...)
+        a = evaluate(gpu_model, gpu_data...; kwargs...)
         model_name = "conditional_entropy"
     else
-        a = evaluate(m.model, m.data[1], nothing; kwargs...)
+        a = evaluate(gpu_model, gpu_data[1], nothing; kwargs...)
         model_name = "entropy"
     end
     result = DataFrame(Symbol(model_name) => a)

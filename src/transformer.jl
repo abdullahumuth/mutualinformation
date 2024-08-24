@@ -36,7 +36,6 @@ function GeneralTransformer(;
         if a_input_dim != 1
             throw(ArgumentError("a_input_dim must be 1 when using gaussian mixtures"))
         end
-        println("gaussian_num: ", gaussian_num)
         deembedding = Dense(embedding_dim => 3*gaussian_num)
     end
 

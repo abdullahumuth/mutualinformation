@@ -200,8 +200,6 @@ function load_generated_data(name, num_samples)
     file = h5open("data/inputs/$(name)/data/generated_" * name * ".h5", "r")
     data = read(file, "data")
     close(file)
-    println(size(data["x"]))
-    println(size(data["y"]))
     m = BSON.load("data/inputs/$(name)/models/generated_" * name * ".bson")
     indices = randperm(MersenneTwister(303), size(data["x"])[3])[1:num_samples]
     return (model = m[:model], data = (data["x"][:,:,indices], data["y"][:,:,indices]))

@@ -195,7 +195,7 @@ function train(model, input...;
     discrete = true
     (size(model.a_embed.:weight)[2] == 1) && (size(model.final_dense.:weight)[1] != 1) && (discrete = false)
 
-    Random.seed!(seed)
+    rng = MersenneTwister(seed)
 
     # organize data
 
@@ -221,7 +221,7 @@ function train(model, input...;
     optimal_params = deepcopy(Flux.params(model))
 
     optim = Flux.setup(Flux.Adam(learning_rate), model)
-    loader = Flux.DataLoader(train_input, batchsize=batch_size, shuffle=true);
+    loader = Flux.DataLoader(train_input, batchsize=batch_size, shuffle=true, rng=rng);
 
     losses = []
     test_losses = []

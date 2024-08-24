@@ -1,9 +1,9 @@
 include("./main.jl")
 
-name = "continuous_sample_test"
-version = 2
+name = "continuous_time_series"
+version = 1
 
-experiment1 = experiment(L, J, g, 0.5, (2^x for x=9:16))
+experiment1 = experiment(L, J, g, 0.1:0.1:0.9, (2^x for x=14:15))
 experiment1(name, version; gaussian_num = 32)
 
 

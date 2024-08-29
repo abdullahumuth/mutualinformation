@@ -7,5 +7,5 @@ include("./main.jl")
 
 version = 1
 load_exp = experiment(L, J, g, 0.5, (2^x for x=7:16))
-load_exp("really_cont_loaded_data_test", version; load = "continuous_production_generation", discrete=false)
+load_exp("really_cont_loaded_data_test", version; load = "continuous_production_generation", gaussian_num = 32)
 

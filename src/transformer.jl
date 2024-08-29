@@ -133,7 +133,29 @@ function generate_samples(m, input_dim, seq_len, num_samples, y; discrete = true
         end
         return x
     else
-        throw(ArgumentError("Not implemented")) # no gaussians yet!
+        x  = zeros((input_dim, seq_len, num_samples)) |> gpu
+        for i in 1:seq_len
+            if !isnothing(y)
+                encoded = encoder_forward(m, y)
+                h = cross_attend(m, x, encoded)
+            else
+                h = decoder_forward(m, x)
+            end
+            h = m.final_dense(h)
+            h = h[:,i,:]
+            h = reshape(h, (:, 3, num_samples))
+            h = cpu(h)
+            weights = softmax(h[:,1,:])
+            μ = h[:,2,:]
+            σ = h[:,3,:]
+            mix = map(1:num_samples) do i
+                MixtureModel(Normal.(μ[:,i], sqrt.(1e-6 .+ softplus(σ[:,i]))), weights[:,i])
+            end
+            h = rand.(mix)
+            h = gpu(h)
+            x[:,i,:] = h
+        end
+        return x
     end
 end
 
@@ -194,7 +216,7 @@ function train(model, input...;
     discrete = true
     (size(model.a_embed.:weight)[2] == 1) && (size(model.final_dense.:weight)[1] != 1) && (discrete = false)
 
-    rng = MersenneTwister(seed)
+    rng = Xoshiro(seed)
 
     # organize data
 

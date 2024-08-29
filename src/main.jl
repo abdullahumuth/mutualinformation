@@ -84,20 +84,19 @@ end
 
 function inputhandler(L,J,g,t,num_samples; load = "", discrete=true, uniform = false, unique = false, fake = false, shuffle=false)
     if load != ""
-        data = load_generated_data(load, num_samples)
-        discrete && (return data.data |> gpu)
-        throw(ArgumentError("Didn't implement non-discrete data loading yet"))
+        data = load_generated_data(load, num_samples, discrete)
+        return data.data |> gpu
     end
     psi = read_wavefunction(L, J, g, t)
     if unique
-        indices = randperm(MersenneTwister(303), 2^L)[1:num_samples]
+        indices = randperm(Xoshiro(303), 2^L)[1:num_samples]
     else
         if uniform
             dist = DiscreteUniform(1, 2^L)
         else
             dist = Categorical(abs2.(psi))
         end
-        indices = rand(MersenneTwister(303), dist, num_samples)
+        indices = rand(Xoshiro(303), dist, num_samples)
     end
 
     f(x) = digits(x, base=2, pad = L)|> reverse
@@ -167,18 +166,38 @@ function save_plots(a,b,c...)
     savefig(plot_models(a,b), "data/outputs/$(c[1])/plots/" * name_files(c...) * ".png")
 end
 
-function generator(name, input_dim=2, seq_len=20, num_samples=10000;conditional=true)
-    if conditional
-        m = GeneralTransformer(a_input_dim = 2, b_input_dim = 1)
-        y = 2 .* rand(2, num_samples) .- 1
-        y = reshape(y, (1, size(y)...)) |> gpu
-        x = generate_samples(m, input_dim, seq_len, num_samples, y) |> gpu
-        output = (x, y)
+function generator(name, input_dim=2, seq_len=20, other_seq_len=2, b_input_dim=1, num_samples=10000, seed=313; conditional=true, discrete=true)
+    rng = Xoshiro(seed)
+    if discrete
+        if conditional
+            m = GeneralTransformer(a_input_dim = input_dim, b_input_dim = b_input_dim)
+            y = 2 .* rand(rng, (other_seq_len, num_samples)) .- 1
+            y = reshape(y, (1, size(y)...)) |> gpu
+            x = generate_samples(m, input_dim, seq_len, num_samples, y) |> gpu
+            output = (x, y)
+        else
+            m = GeneralTransformer(a_input_dim = input_dim)
+            x = generate_samples(m, input_dim, seq_len, num_samples, nothing) |> gpu
+            output = (x,)
+        end
     else
-        m = GeneralTransformer(a_input_dim = 2)
-        x = generate_samples(m, input_dim, seq_len, num_samples, nothing) |> gpu
-        output = (x,)
+        if conditional
+            m = GeneralTransformer(a_input_dim = input_dim, b_input_dim = b_input_dim, gaussian_num = 32)
+            x_proto = bitrand(rng, (other_seq_len, num_samples))
+            x = zeros((2, size(x_proto)...))
+            x[1, :, :] .= x_proto
+            x[2, :, :] .= 1 .- x_proto
+            x = Int.(x) |> gpu
+            y = generate_samples(m, input_dim, seq_len, num_samples, x; discrete = false) |> gpu
+            output = (x, y)
+        else
+            m = GeneralTransformer(a_input_dim = input_dim, gaussian_num = 32)
+            y = generate_samples(m, input_dim, seq_len, num_samples, nothing; discrete = false) |> gpu
+            output = (y,)
+        end
+
     end
+
     mkdir_safe("data/inputs/$(name)")
     mkdir_safe("data/inputs/$(name)/models")
     mkdir_safe("data/inputs/$(name)/data")
@@ -188,21 +207,42 @@ function generator(name, input_dim=2, seq_len=20, num_samples=10000;conditional=
     end
     h5open("data/inputs/$(name)/data/generated_" * name * ".h5", "w") do file
         g = create_group(file, "data")
-        g["x"] = cpu(output[1])
         if length(output) > 1
+            g["x"] = cpu(output[1])
             g["y"] = cpu(output[2])
+        else
+            if discrete
+                g["x"] = cpu(output[1])
+            else
+                g["y"] = cpu(output[1])
+            end
         end
     end
     return (model = m, data = output)
 end
 
-function load_generated_data(name, num_samples)
+function load_generated_data(name, num_samples, discrete=true)
     file = h5open("data/inputs/$(name)/data/generated_" * name * ".h5", "r")
     data = read(file, "data")
     close(file)
     m = BSON.load("data/inputs/$(name)/models/generated_" * name * ".bson")
-    indices = randperm(MersenneTwister(303), size(data["x"])[3])[1:num_samples]
-    return (model = m[:model], data = (data["x"][:,:,indices], data["y"][:,:,indices]))
+    if discrete
+        indices = randperm(Xoshiro(303), size(data["x"])[3])[1:num_samples]
+        try
+            full_data = (data["x"][:,:,indices], data["y"][:,:,indices])
+        catch e
+            full_data = (data["x"][:,:,indices],)
+        end
+    else
+        indices = randperm(Xoshiro(303), size(data["y"])[3])[1:num_samples]
+        try
+            full_data = (data["x"][:,:,indices], data["y"][:,:,indices])
+        catch e
+            full_data = (data["y"][:,:,indices],)
+        end
+    end
+
+    return (model = m[:model], data = full_data)
 end
 
 
@@ -214,12 +254,12 @@ function evaluate(model, x, y; discrete = true)
     
 end
 
-function generation_experiment(name, input_dim = 2, seq_len = 20, num_samples = 10000; get_data_from = "", conditional = true, kwargs...)
+function generation_experiment(name, input_dim = 2, output_dim=1, seq_len = 20, other_seq_len=2, num_samples = 10000; seed=313, get_data_from = "", discrete=true, conditional = true, kwargs...)
     if get_data_from == ""
         get_data_from = name
-        m = generator(name, input_dim, seq_len, num_samples; conditional = conditional)
+        m = generator(name, input_dim, seq_len, other_seq_len, output_dim, num_samples, seed; conditional = conditional, discrete = discrete)
     else
-        m = load_generated_data(get_data_from, num_samples)
+        m = load_generated_data(get_data_from, num_samples, discrete)
     end
     mkdir_safe("data/inputs/$(get_data_from)")
     mkdir_safe("data/inputs/$(get_data_from)/results")

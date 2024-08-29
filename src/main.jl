@@ -228,24 +228,26 @@ function generator(name, model_output_dim = 2, model_output_seq_len = 20, initia
     return (model = m, data = output)
 end
 
-function load_generated_data(name, num_samples, discrete=true)
+function load_generated_data(name, num_samples, discrete=true; conditional=true)
     file = h5open("data/inputs/$(name)/data/generated_" * name * ".h5", "r")
     data = read(file, "data")
     close(file)
     m = BSON.load("data/inputs/$(name)/models/generated_" * name * ".bson")
     if discrete
         indices = randperm(Xoshiro(303), size(data["x"])[3])[1:num_samples]
-        try
+        if conditional
             full_data = (data["x"][:,:,indices], data["y"][:,:,indices])
-        catch e
+        else
             full_data = (data["x"][:,:,indices],)
         end
     else
         indices = randperm(Xoshiro(303), size(data["y"])[3])[1:num_samples]
-        try
+        if conditional
             full_data = (data["y"][:,:,indices], data["x"][:,:,indices])
-        catch e
+            println("Data loaded")
+        else
             full_data = (data["y"][:,:,indices],)
+            println("Data loaded")
         end
     end
 
@@ -266,7 +268,7 @@ function generation_experiment(name, model_output_dim = 2, model_output_seq_len 
         get_data_from = name
         m = generator(name, model_output_dim, model_output_seq_len, initially_generated_dim, initially_generated_seq_len, num_samples, seed; conditional = conditional, discrete = discrete)
     else
-        m = load_generated_data(get_data_from, num_samples, discrete)
+        m = load_generated_data(get_data_from, num_samples, discrete; conditional=conditional)
     end
     mkdir_safe("data/inputs/$(get_data_from)")
     mkdir_safe("data/inputs/$(get_data_from)/results")

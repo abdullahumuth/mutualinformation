@@ -6,6 +6,6 @@ include("./main.jl")
 #generation_experiment("continuous_production_generation", 1, 2, 2, L, 2^16; seed=120, discrete=false, get_data_from = "", conditional = true)
 
 version = 1
-load_exp = experiment(L, J, g, 0.5, (2^x for x=7:16))
-load_exp("really_cont_loaded_data_test", version; load = "continuous_production_generation", gaussian_num = 32)
+load_exp = experiment(L, J, g, 0.1, (2^x for x=7:16))
+load_exp("t01_cont_loaded_data_test", version; load = "continuous_production_generation", gaussian_num = 32)
 

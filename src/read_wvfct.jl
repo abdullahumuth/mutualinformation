@@ -1,7 +1,7 @@
 using DataFrames, HDF5
 using LinearAlgebra
 
-function read_wavefunction(L, J, g, t)
+function read_hdf5_wavefunction(L, J, g, t)
   path = "data/inputs/" 
   name = path * "psi_L=$(L).h5"
 

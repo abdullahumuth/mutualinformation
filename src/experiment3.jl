@@ -1,8 +1,5 @@
 include("./main.jl")
 
-name = "ER_improved_unique_uniform_time_series_l20_batch128"
-name = "customizable_unique_uniform_time_series_l20_batch128"
-version = 4
-
-experiment3 = experiment(L, J, g, 0.0:0.05:0.95, 10000)
-experiment3(name, version; unique = true, uniform = true)
+version = 1
+load_exp = experiment(12, J, g, 0.1:0.4:0.5, (2^x for x=7:16))
+load_exp("cont_l12_sample_test", version; gaussian_num = 32)

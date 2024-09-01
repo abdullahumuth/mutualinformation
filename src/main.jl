@@ -3,7 +3,7 @@ Pkg.activate(".")
 
 include("./transformer.jl")
 include("./read_npy_wavefunctions.jl")
-#include("./read_wvfct.jl")
+include("./read_wvfct.jl")
 using Plots
 using BSON
 using CSV
@@ -87,7 +87,11 @@ function inputhandler(L,J,g,t,num_samples; load = "", discrete=true, uniform = f
         data = load_generated_data(load, num_samples, discrete)
         return data.data |> gpu
     end
-    psi = read_wavefunction(L, J, g, t)
+    if L == 20
+        psi = read_wavefunction(L, J, g, t)
+    else
+        psi = read_hdf5_wavefunction(L, J, g, t)
+    end
     if unique
         indices = randperm(Xoshiro(303), 2^L)[1:num_samples]
     else

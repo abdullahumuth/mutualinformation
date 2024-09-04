@@ -42,7 +42,7 @@ function mkdir_safe(path)
     try mkdir(path) catch e @warn "Probably file already exists: " * e.msg end
 end
 
-function (exp::experiment)(name="nameless_exp", version=1; load="", gaussian_num=0, uniform=false, unique=false, fake=false, shuffle=false, kwargs...)
+function (exp::experiment)(name="nameless_exp", version=1; load="", noise=0, gaussian_num=0, uniform=false, unique=false, fake=false, shuffle=false, kwargs...)
     name = "$(name)_v$(version)"
 
     mkdir_safe("data/outputs/$(name)")
@@ -55,7 +55,7 @@ function (exp::experiment)(name="nameless_exp", version=1; load="", gaussian_num
         c = name, L, J, g, t, num_samples
         println("Running experiment with parameters: ", c)
     #try
-        entropy, conditional_entropy = mutualinformation(inputhandler(c[2:end]...; load=load, discrete = (gaussian_num==0), uniform=uniform, unique=unique, fake=fake, shuffle=shuffle)...; gaussian_num = gaussian_num, kwargs...)
+        entropy, conditional_entropy = mutualinformation(inputhandler(c[2:end]...; noise=noise, load=load, discrete = (gaussian_num==0), uniform=uniform, unique=unique, fake=fake, shuffle=shuffle)...; gaussian_num = gaussian_num, kwargs...)
         
         try
             save_models(entropy, conditional_entropy, c...)
@@ -82,7 +82,7 @@ function (exp::experiment)(name="nameless_exp", version=1; load="", gaussian_num
     end
 end
 
-function inputhandler(L,J,g,t,num_samples; load = "", discrete=true, uniform = false, unique = false, fake = false, shuffle=false)
+function inputhandler(L,J,g,t,num_samples; noise=0, load = "", discrete=true, uniform = false, unique = false, fake = false, shuffle=false)
     if load != ""
         data = load_generated_data(load, num_samples, discrete)
         return data.data |> gpu
@@ -117,7 +117,7 @@ function inputhandler(L,J,g,t,num_samples; load = "", discrete=true, uniform = f
     else
         y = stack(map(x -> [real(psi[x]), imag(psi[x])], indices))
     end
-
+    noise > 0 && (y .+= randn(Xoshiro(303), size(y)) .* noise)
     y = reshape(y, (1, size(y)...)) |> gpu
     discrete && (return x, y)
     return y, x

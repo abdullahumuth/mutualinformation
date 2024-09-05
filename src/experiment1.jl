@@ -1,11 +1,16 @@
 include("./main.jl")
 
-name = "continuous_time_series"
+name = "tryy_new"
 version = 1
 
-experiment1 = experiment(L, J, g, 0.1:0.1:0.9, (2^x for x=14:15))
-experiment1(name, version; gaussian_num = 32)
+# experiment1 = experiment(L, J, g, 0.1, (2^x for x=5:6))
+# experiment1(name, version)
 
+data_gen_params = OrderedDict(:L => L, :J => J, :g => g, :t => 0.1, :num_samples=>(2^x for x=5:6))
+exp_mode = OrderedDict(:discrete => true)
+hyper_params = OrderedDict(:batch_size => 256)
+
+simple_experiment(name, version, data_gen_params; exp_modes_params = exp_mode, hyper_parameters = hyper_params)
 
 
 

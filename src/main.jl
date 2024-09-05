@@ -10,6 +10,10 @@ using CSV
 using DataFrames
 using Distributions
 using HDF5
+using Base.Iterators: product
+using OrderedCollections
+using JSON3
+using Dates
 
 struct experiment
     L::Union{AbstractRange, Base.Generator}
@@ -42,6 +46,70 @@ function mkdir_safe(path)
     try mkdir(path) catch e @warn "Probably file already exists: " * e.msg end
 end
 
+
+function simple_experiment(name, version, data_gen_params; exp_modes_params=OrderedDict(), hyper_parameters=OrderedDict())
+    name = "$(name)_v$(version)"
+
+    mkdir_safe("data/outputs/$(name)")
+    mkdir_safe("data/outputs/$(name)/models")
+    mkdir_safe("data/outputs/$(name)/losses")
+    mkdir_safe("data/outputs/$(name)/plots")
+    mkdir_safe("data/outputs/$(name)/results")
+
+    jsons = OrderedDict()
+    for data_gen_param_list in product(values(data_gen_params)...), exp_modes_param_list in product(values(exp_modes_params)...), hyper_param_list in product(values(hyper_parameters)...)
+        
+        data_gen_param_dict = NamedTuple(zip(keys(data_gen_params), data_gen_param_list))
+        exp_modes_param_dict = NamedTuple(zip(keys(exp_modes_params), exp_modes_param_list))
+        hyper_param_dict = NamedTuple(zip(keys(hyper_parameters), hyper_param_list))
+
+        println("Running experiment with parameters: ", name, " ", data_gen_param_dict, " ", exp_modes_param_dict, " ", hyper_param_dict)
+
+
+        input = inputhandler(data_gen_param_dict...; exp_modes_param_dict...)
+        entropy, conditional_entropy = mutualinformation(input...; hyper_param_dict...)
+
+
+        file_name = name_files(merge(data_gen_param_dict, exp_modes_param_dict, hyper_param_dict))
+        try
+            save_models(entropy, conditional_entropy, name, file_name)
+        catch e
+            if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
+            @warn "Failed to save models: " * str
+        end
+        try
+           output_csv(entropy, conditional_entropy, name, file_name)
+        catch e
+            if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
+            @warn "Failed to save csv: " * str
+        end
+        try
+            jsons[file_name] = output(entropy, conditional_entropy, name, file_name, data_gen_param_dict, exp_modes_param_dict, hyper_param_dict)
+        catch e
+            if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
+            @warn "Failed to create OrderedDict " * str
+        end
+        
+        try
+            save_plots(entropy, conditional_entropy, name, file_name)
+        catch e
+            if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
+            @warn "Failed to save plots: " * str
+        end
+    end
+    try 
+        output_json(jsons, name)
+    catch e
+        if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
+        @warn "Failed to save json: " * str
+    end
+end
+                
+
+
+
+
+
 function (exp::experiment)(name="nameless_exp", version=1; load="", noise=0, gaussian_num=0, uniform=false, unique=false, fake=false, shuffle=false, kwargs...)
     name = "$(name)_v$(version)"
 
@@ -56,21 +124,21 @@ function (exp::experiment)(name="nameless_exp", version=1; load="", noise=0, gau
         println("Running experiment with parameters: ", c)
     #try
         entropy, conditional_entropy = mutualinformation(inputhandler(c[2:end]...; noise=noise, load=load, discrete = (gaussian_num==0), uniform=uniform, unique=unique, fake=fake, shuffle=shuffle)...; gaussian_num = gaussian_num, kwargs...)
-        
+        file_name = name_files(c...)
         try
-            save_models(entropy, conditional_entropy, c...)
+            save_models(entropy, conditional_entropy, name, file_name)
         catch e
             if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
             @warn "Failed to save models: " * str
         end
         try
-           output_csv(entropy, conditional_entropy, c...; kwargs...)
+           output_csv(entropy, conditional_entropy, name, file_name)
         catch e
             if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
             @warn "Failed to save csv: " * str
         end
         try
-            save_plots(entropy, conditional_entropy, c...)
+            save_plots(entropy, conditional_entropy, name, file_name)
         catch e
             if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
             @warn "Failed to save plots: " * str
@@ -149,25 +217,74 @@ function name_files(name, L, J, g, t, num_samples)
     return "L=$(L)_J=$(J)_g=$(g)_t=$(t)_num_samples=$(num_samples)"
 end
 
-function save_models(a,b,c...)
+function name_files(dict)
+    return join(["$(k)=$(v)_" for (k,v) in zip(keys(dict), values(dict))])
+end
+
+function save_models(a, b, exp_name, file_name)
     let 
         entropy_model = cpu(a[2].net)
         conditional_entropy_model = cpu(b[2].net)
-        bson("data/outputs/$(c[1])/models/" * name_files(c...) * ".bson", entropy = entropy_model, conditional_entropy = conditional_entropy_model)
+        bson("data/outputs/$exp_name/models/" * file_name * ".bson", entropy = entropy_model, conditional_entropy = conditional_entropy_model)
     end
 end
 
-function output_csv(a,b,c...; kwargs...)
-    result = DataFrame(:mutual_information => a[1]-b[1], :entropy => a[1], :conditional_entropy => b[1], :avg_time_entropy => a[2].avg_time, :avg_time_conditional_entropy => b[2].avg_time, kwargs...)
-    CSV.write("data/outputs/$(c[1])/results/" * name_files(c...) * ".csv", result)
-    entropy_loss = DataFrame(epoch = 1:length(a[2].train_losses), train = a[2].train_losses, test = a[2].test_losses)
-    CSV.write("data/outputs/$(c[1])/losses/entropy_" * name_files(c...) * ".csv", entropy_loss)
-    conditional_entropy_loss = DataFrame(epoch = 1:length(b[2].train_losses), train = b[2].train_losses, test = b[2].test_losses)
-    CSV.write("data/outputs/$(c[1])/losses/conditional_entropy_" * name_files(c...) * ".csv", conditional_entropy_loss)
+function output(a, b, exp_name, file_name, params, exp_params, hyper_params)
+
+    # Construct the data structure
+    data = Dict(
+        "parameters" => params,
+        "experiment_modes" => exp_params, 
+        "hyperparameters" => hyper_params,
+        "results" => Dict(
+            "mutual_information" => a[1] - b[1],
+            "entropy" => a[1],
+            "conditional_entropy" => b[1]
+        ),
+        "other_results" => Dict(
+            "avg_time_entropy" => a[2].avg_time,
+            "avg_time_conditional_entropy" => b[2].avg_time
+        )
+    )
+    return data
 end
 
-function save_plots(a,b,c...)
-    savefig(plot_models(a,b), "data/outputs/$(c[1])/plots/" * name_files(c...) * ".png")
+
+function output_json(data, exp_name)
+    # Create the directory if it doesn't exist
+    mkpath("data/outputs/$exp_name/results")
+
+    # Generate the filename
+    filename = "data/outputs/$exp_name/results/result.json"
+
+    
+
+
+    # Write to JSON file
+    open(filename, "a") do io
+        JSON3.pretty(io, OrderedDict("experiments" => data,
+        "metadata" => OrderedDict(
+            "date" => Dates.format(Dates.now(), "yyyy-mm-dd HH:MM:SS"),
+            "number_of_experiments" => length(data)
+        )))
+    end
+
+    # Return the data structure (optional)
+    return data
+
+end
+    
+
+
+function output_csv(a,b, exp_name, file_name)
+    entropy_loss = DataFrame(epoch = 1:length(a[2].train_losses), train = a[2].train_losses, test = a[2].test_losses)
+    CSV.write("data/outputs/$exp_name/losses/entropy_" * file_name * ".csv", entropy_loss)
+    conditional_entropy_loss = DataFrame(epoch = 1:length(b[2].train_losses), train = b[2].train_losses, test = b[2].test_losses)
+    CSV.write("data/outputs/$exp_name/losses/conditional_entropy_" * file_name * ".csv", conditional_entropy_loss)
+end
+
+function save_plots(a,b,exp_name, file_name)
+    savefig(plot_models(a,b), "data/outputs/$exp_name/plots/" * file_name * ".png")
 end
 
 function generator(name, model_output_dim = 2, model_output_seq_len = 20, initially_generated_dim = 1, initially_generated_seq_len=2, num_samples=10000, seed=313; conditional=true, discrete=true)

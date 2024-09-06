@@ -63,6 +63,13 @@ function simple_experiment(name, version, data_gen_params; exp_modes_params=Orde
         exp_modes_param_dict = NamedTuple(zip(keys(exp_modes_params), exp_modes_param_list))
         hyper_param_dict = NamedTuple(zip(keys(hyper_parameters), hyper_param_list))
 
+        # Safe access to gaussian_num with a default value of 0
+        gaussian_num = get(Dict(pairs(hyper_param_dict)), :gaussian_num, 0)
+
+        # Conditional modification of exp_modes_param_dict
+        gaussian_num != 0 && (exp_modes_param_dict = merge(exp_modes_param_dict, (discrete = false,)))
+
+
         println("Running experiment with parameters: ", name, " ", data_gen_param_dict, " ", exp_modes_param_dict, " ", hyper_param_dict)
 
 
@@ -261,17 +268,13 @@ function output_json(data, exp_name)
 
 
     # Write to JSON file
-    open(filename, "a") do io
+    open(filename, "w") do io
         JSON3.pretty(io, OrderedDict("experiments" => data,
         "metadata" => OrderedDict(
             "date" => Dates.format(Dates.now(), "yyyy-mm-dd HH:MM:SS"),
             "number_of_experiments" => length(data)
         )))
     end
-
-    # Return the data structure (optional)
-    return data
-
 end
     
 

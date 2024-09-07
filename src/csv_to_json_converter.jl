@@ -22,6 +22,7 @@ function csv_to_json_converter(folder_path)
         # Initialize dictionaries for parameters and hyperparameters
         parameters = OrderedDict()
         hyperparameters = OrderedDict()
+        experiment_modes = OrderedDict()
         
         # Parse the file name
         for part in parts
@@ -48,6 +49,7 @@ function csv_to_json_converter(folder_path)
         # Create the experiment structure
         all_experiments[file_name] = OrderedDict(
             "parameters" => parameters,
+            "experiment_modes" => experiment_modes,
             "hyperparameters" => hyperparameters,
             "results" => Dict(),
             "other_results" => Dict()
@@ -97,7 +99,7 @@ function csv_to_json_converter(folder_path)
     )
     
     # Write to a JSON file
-    output_file = joinpath(folder_path, "unified_experiments.json")
+    output_file = joinpath(folder_path, "result.json")
     open(output_file, "w") do io
         JSON3.pretty(io, json_data)
     end
@@ -109,20 +111,31 @@ function move_csv(folder_path)
     csv_files = filter(f -> endswith(f, ".csv"), readdir(folder_path))
     if !isdir(joinpath(folder_path, "old"))
         mkdir(joinpath(folder_path, "old"))
+
     end
     for file in csv_files
-        mv(joinpath(folder_path, file), joinpath(folder_path, "old", file))
+        mv(joinpath(folder_path, file), joinpath(folder_path, "old", file), force=true)
     end
 end
 
-foreach((d = readdir("data/old", join=true); d[isdir.(d)])) do folder
-    if !isdir(joinpath(folder, "results/old"))
-        nothing
-    else
-        csv_to_json_converter("$folder/results")
-        #move_csv("$folder/results/")
+
+foreach((d = readdir("data/outputs", join=true); d[isdir.(d)])) do folder
+    if !(folder == "data/outputs\\_old" || folder == "data/outputs\\_logs")
+        move_csv("$folder/results/")
+        if !isfile(joinpath(folder, "results/result.json"))
+            csv_to_json_converter("$folder/results")
+        end
+        if isfile(joinpath(folder, "results/unified_experiments.json"))
+            rm(joinpath(folder, "results/unified_experiments.json"))
+        end
+        if isfile(joinpath(folder, "results/old/unified_experiments.json"))
+            rm(joinpath(folder, "results/old/unified_experiments.json"))
+        end
     end
 end
+
+
+
 
 
 

@@ -1,5 +1,5 @@
 include("./main.jl")
-
+include("plot_from_json.jl")
 
 # generation_experiment("production_generation", 2, 1, 20, 2^16; discrete=false, get_data_from = "", conditional = true)
 

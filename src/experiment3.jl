@@ -1,5 +1,5 @@
 include("./main.jl")
-
+include("plot_from_json.jl")
 name = "learning_rate_tests"
 version = 1
 

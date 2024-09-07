@@ -1,5 +1,5 @@
 include("./main.jl")
-
+include("plot_from_json.jl")
 name = "noise0.00001_discrete_sample"
 version = 1
 

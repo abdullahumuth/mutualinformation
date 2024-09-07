@@ -56,7 +56,13 @@ function simple_experiment(name, version, data_gen_params; exp_modes_params=Orde
     mkdir_safe("data/outputs/$(name)/plots")
     mkdir_safe("data/outputs/$(name)/results")
 
-    jsons = OrderedDict()
+    jsons = Dict()
+    try
+        output_json(jsons, name)
+    catch e
+        if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
+        @warn "Failed to create JSON " * str
+    end
     for data_gen_param_list in product(values(data_gen_params)...), exp_modes_param_list in product(values(exp_modes_params)...), hyper_param_list in product(values(hyper_parameters)...)
         
         data_gen_param_dict = NamedTuple(zip(keys(data_gen_params), data_gen_param_list))
@@ -67,7 +73,12 @@ function simple_experiment(name, version, data_gen_params; exp_modes_params=Orde
         gaussian_num = get(Dict(pairs(hyper_param_dict)), :gaussian_num, 0)
 
         # Conditional modification of exp_modes_param_dict
-        gaussian_num != 0 && (exp_modes_param_dict = merge(exp_modes_param_dict, (discrete = false,)))
+        if gaussian_num != 0 
+            exp_modes_param_dict = merge(exp_modes_param_dict, (discrete = false,))
+        else
+            exp_modes_param_dict = merge(exp_modes_param_dict, (discrete = true,))
+        end
+
 
 
         println("Running experiment with parameters: ", name, " ", data_gen_param_dict, " ", exp_modes_param_dict, " ", hyper_param_dict)
@@ -91,10 +102,13 @@ function simple_experiment(name, version, data_gen_params; exp_modes_params=Orde
             @warn "Failed to save csv: " * str
         end
         try
-            jsons[file_name] = output(entropy, conditional_entropy, name, file_name, data_gen_param_dict, exp_modes_param_dict, hyper_param_dict)
+            json = read("data/outputs/$name/results/result.json", String)
+            experiments = copy(JSON3.read(json))[:experiments]
+            experiments[Symbol(file_name)] = output(entropy, conditional_entropy, name, file_name, data_gen_param_dict, exp_modes_param_dict, hyper_param_dict)
+            output_json(experiments, name)
         catch e
             if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
-            @warn "Failed to create OrderedDict " * str
+            @warn "Failed to save JSON " * str
         end
         
         try
@@ -103,12 +117,6 @@ function simple_experiment(name, version, data_gen_params; exp_modes_params=Orde
             if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
             @warn "Failed to save plots: " * str
         end
-    end
-    try 
-        output_json(jsons, name)
-    catch e
-        if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
-        @warn "Failed to save json: " * str
     end
 end
                 

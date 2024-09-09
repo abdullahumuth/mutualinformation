@@ -15,37 +15,9 @@ using OrderedCollections
 using JSON3
 using Dates
 
-struct experiment
-    L::Union{AbstractRange, Base.Generator}
-    J::Union{AbstractRange, Base.Generator}
-    g::Union{AbstractRange, Base.Generator}
-    t::Union{AbstractRange, Base.Generator}
-    num_samples::Union{AbstractRange, Base.Generator}
-end
-
-function experiment(L, J, g, t, num_samples)
-    if typeof(L) == Int
-        L = L:1:L
-    end
-    if typeof(J) == Int 
-        J = J:1:J
-    end
-    if typeof(num_samples) == Int
-        num_samples = num_samples:1:num_samples
-    end
-    if typeof(g) == Float64
-        g = g:1.0:g
-    end
-    if typeof(t) == Float64
-        t = t:1.0:t
-    end
-    return experiment(L, J, g, t, num_samples)
-end
-
 function mkdir_safe(path)
     try mkdir(path) catch e @warn "Probably file already exists: " * e.msg end
 end
-
 
 function simple_experiment(name, version, data_gen_params; exp_modes_params=OrderedDict(), hyper_parameters=OrderedDict())
     name = "$(name)_v$(version)"
@@ -79,8 +51,6 @@ function simple_experiment(name, version, data_gen_params; exp_modes_params=Orde
             exp_modes_param_dict = merge(exp_modes_param_dict, (discrete = true,))
         end
 
-
-
         println("Running experiment with parameters: ", name, " ", data_gen_param_dict, " ", exp_modes_param_dict, " ", hyper_param_dict)
 
 
@@ -104,7 +74,7 @@ function simple_experiment(name, version, data_gen_params; exp_modes_params=Orde
         try
             json = read("data/outputs/$name/results/result.json", String)
             experiments = copy(JSON3.read(json))[:experiments]
-            experiments[Symbol(file_name)] = output(entropy, conditional_entropy, name, file_name, data_gen_param_dict, exp_modes_param_dict, hyper_param_dict)
+            experiments[Symbol(file_name)] = output(entropy, conditional_entropy, data_gen_param_dict, exp_modes_param_dict, hyper_param_dict)
             output_json(experiments, name)
         catch e
             if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
@@ -121,49 +91,6 @@ function simple_experiment(name, version, data_gen_params; exp_modes_params=Orde
 end
                 
 
-
-
-
-
-function (exp::experiment)(name="nameless_exp", version=1; load="", noise=0, gaussian_num=0, uniform=false, unique=false, fake=false, shuffle=false, kwargs...)
-    name = "$(name)_v$(version)"
-
-    mkdir_safe("data/outputs/$(name)")
-    mkdir_safe("data/outputs/$(name)/models")
-    mkdir_safe("data/outputs/$(name)/losses")
-    mkdir_safe("data/outputs/$(name)/plots")
-    mkdir_safe("data/outputs/$(name)/results")
-
-    for L in exp.L, J in exp.J, g in exp.g, t in exp.t, num_samples in exp.num_samples
-        c = name, L, J, g, t, num_samples
-        println("Running experiment with parameters: ", c)
-    #try
-        entropy, conditional_entropy = mutualinformation(inputhandler(c[2:end]...; noise=noise, load=load, discrete = (gaussian_num==0), uniform=uniform, unique=unique, fake=fake, shuffle=shuffle)...; gaussian_num = gaussian_num, kwargs...)
-        file_name = name_files(c...)
-        try
-            save_models(entropy, conditional_entropy, name, file_name)
-        catch e
-            if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
-            @warn "Failed to save models: " * str
-        end
-        try
-           output_csv(entropy, conditional_entropy, name, file_name)
-        catch e
-            if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
-            @warn "Failed to save csv: " * str
-        end
-        try
-            save_plots(entropy, conditional_entropy, name, file_name)
-        catch e
-            if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
-            @warn "Failed to save plots: " * str
-        end
-    #catch e
-    #    if "msg" in fieldnames(typeof(e)) str = e.msg else str = "No message" end
-    #    @warn "Failed to compute mutual information: " * str
-    #end
-    end
-end
 
 function inputhandler(L,J,g,t,num_samples; noise=0, load = "", discrete=true, uniform = false, unique = false, fake = false, shuffle=false)
     if load != ""
@@ -228,9 +155,6 @@ function plot_models(a, b)
     return plot(p,p2, layout = (2,1))
 end
 
-function name_files(name, L, J, g, t, num_samples)
-    return "L=$(L)_J=$(J)_g=$(g)_t=$(t)_num_samples=$(num_samples)"
-end
 
 function name_files(dict)
     return join(["$(k)=$(v)_" for (k,v) in zip(keys(dict), values(dict))])
@@ -244,7 +168,7 @@ function save_models(a, b, exp_name, file_name)
     end
 end
 
-function output(a, b, exp_name, file_name, params, exp_params, hyper_params)
+function output(a, b, params, exp_params, hyper_params)
 
     # Construct the data structure
     data = Dict(

@@ -2,7 +2,6 @@ using Pkg
 Pkg.activate(".")
 
 include("./transformer.jl")
-include("./read_npy_wavefunctions.jl")
 include("./read_wvfct.jl")
 using Plots
 using BSON
@@ -15,9 +14,6 @@ using OrderedCollections
 using JSON3
 using Dates
 
-function mkdir_safe(path)
-    try mkdir(path) catch e @warn "Probably file already exists: " * e.msg end
-end
 
 function simple_experiment(name, version, data_gen_params; exp_modes_params=OrderedDict(), hyper_parameters=OrderedDict())
     name = "$(name)_v$(version)"
@@ -191,7 +187,7 @@ end
 
 function output_json(data, exp_name)
     # Create the directory if it doesn't exist
-    mkpath("data/outputs/$exp_name/results")
+    try mkpath("data/outputs/$exp_name/results") catch e end
 
     # Generate the filename
     filename = "data/outputs/$exp_name/results/result.json"

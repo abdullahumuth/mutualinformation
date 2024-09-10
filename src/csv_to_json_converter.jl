@@ -3,6 +3,8 @@ using DataFrames
 using JSON3
 using Dates
 using OrderedCollections
+include("main.jl")
+
 
 function csv_to_json_converter(folder_path)
     # Get all CSV files in the folder
@@ -137,9 +139,67 @@ end
 
 
 
+function merge_json_files(file1, file2, output_file)
+    # Read the JSON data from the two files
+    data1 = copy(JSON3.read(read(file1, String)))[:experiments]
+    data2 = copy(JSON3.read(read(file2, String)))[:experiments]
 
+    # Merge the two datasets
+    merged_data = merge(data1, data2)
+
+    output_json(merged_data, output_file)
+end
+
+# Example usage
+# merge_json_files("data/outputs/noise0.1_discrete_sample_v1/results/result.json", "data/outputs/noise0.01_discrete_sample_v1/results/result.json", "merged_results")
+# merge_json_files("data/outputs/merged_results/results/result.json", "data/outputs/noise0.00001_discrete_sample_v1/results/result.json", "merged_discrete_noise_results")
+# merge_json_files("data/outputs/merged_discrete_noise_results_all_with_no_noise/results/result.json", "data/outputs/_old/sample_convergence_newest_batch128_v1/results/result.json", "merged_discrete_noise_results_all_with_no_noise_l12")
 
 # Usage example:
 # csv_to_json_converter("path/to/your/csv/folder")
-#csv_to_json_converter("data/old/sample_convergence_newest_batch512_v1/results/")
-#move_csv("data/old/sample_convergence_newest_batch512_v1/results/")
+# csv_to_json_converter("data/old/sample_convergence_newest_batch512_v1/results/")
+# move_csv("data/old/sample_convergence_newest_batch512_v1/results/")
+
+
+function deep_convert_to_dict(obj)
+    if obj isa AbstractDict
+        return OrderedDict(k => deep_convert_to_dict(v) for (k, v) in obj)
+    elseif obj isa AbstractArray
+        return [deep_convert_to_dict(v) for v in obj]
+    else
+        return obj
+    end
+end
+
+function modify_json(input_file, output_file)
+    # Read the JSON data
+    json_data = JSON3.read(read(input_file, String))
+
+    # Convert to a fully mutable structure
+    mutable_data = deep_convert_to_dict(json_data)
+
+    # Iterate through each experiment in the JSON
+    for (key, value) in mutable_data[:experiments]
+        # Check if the filename doesn't contain "noise="
+        if occursin(r"noise=0.001", string(key))
+            # If "experiment_modes" doesn't exist, create it
+            if !haskey(value, :experiment_modes)
+                value[:experiment_modes] = OrderedDict()
+            end
+            
+            # Add "noise": 0 to experiment_modes
+            value[:experiment_modes][:noise] = 0.001
+        end
+    end
+
+    # Write the modified data back to a new JSON file
+    open(output_file, "w") do io
+        JSON3.pretty(io, mutable_data)
+    end
+end
+# Example usage
+# input_file = "data/outputs/merged_discrete_noise_results_all_with_no_noise/results/resulting3.json"
+# output_file = "data/outputs/merged_discrete_noise_results_all_with_no_noise/results/resulting4.json"
+# modify_json(input_file, output_file)
+
+

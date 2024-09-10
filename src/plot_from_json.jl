@@ -135,3 +135,9 @@ end
 # configdict = Dict("path" => "_old/transfer_time_evolve_convergence_large_batch256_v1", "x" => "t", "y" => ["entropy", "conditional_entropy"], "other_vars" => ["num_samples","g"], "log_scale" => "y")
 # 
 # custom_plot(configdict)
+
+configdict = Dict("path" => "merged_discrete_noise_results_all_with_no_noise", "x" => "num_samples", "y" => ["entropy","conditional_entropy"], "other_vars" => [], "log_scale" => "y")
+custom_plot(configdict)
+
+config2 = Dict("path" => "merged_discrete_noise_results_all_with_no_noise", "x" => "num_samples", "y" => ["mutual_information"], "other_vars" => [], "log_scale" => "y")
+custom_plot(config2)

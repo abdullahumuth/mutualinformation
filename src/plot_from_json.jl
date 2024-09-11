@@ -78,6 +78,7 @@ function create_and_save_plot(data, x_col, y_cols, config, other_vars, saving_pa
     end
    
     plot!(p, margin=5Plots.mm, legend=:outerbottom)  
+    length(other_vars) > 0 ? foldername = "$(x_col)_vs_$(join(y_cols, "_"))_with_$(join(other_vars, "_"))" :
     foldername = "$(x_col)_vs_$(join(y_cols, "_"))"
     filename = "$(config_str).pdf"
     try 
@@ -136,8 +137,23 @@ end
 # 
 # custom_plot(configdict)
 
+path = 
+
+x =
+
+y1 = 
+
+y2 = 
+
+other_vars =
+
+log_scale =
+
 configdict = Dict("path" => "merged_discrete_noise_results_all_with_no_noise", "x" => "num_samples", "y" => ["entropy","conditional_entropy"], "other_vars" => [], "log_scale" => "y")
 custom_plot(configdict)
 
 config2 = Dict("path" => "merged_discrete_noise_results_all_with_no_noise", "x" => "num_samples", "y" => ["mutual_information"], "other_vars" => [], "log_scale" => "y")
+custom_plot(config2)
+
+config2 = Dict("path" => "merged_discrete_noise_results_all_with_no_noise", "x" => "num_samples", "y" => ["conditional_entropy"], "other_vars" => [], "log_scale" => "y")
 custom_plot(config2)

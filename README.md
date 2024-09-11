@@ -2,7 +2,9 @@
 
 This is a project report of my summer internship project at the [Computational Quantum Science Research Group](https://www.computational-quantum.science/), part of the [Institute of Quantum Control](https://www.fz-juelich.de/en/pgi/pgi-8) at the Forschungszentrum Jülich, Germany, 2024.
 
-I would like to thank Dr. Markus Schmitt, the leader of the research group, for his helps through the internship period and before, and for providing me with the opportunity to work on this project.
+I would like to thank Dr. Markus Schmitt, the leader of the research group and my supervisor for the project, for his helps through the internship period and before, and for providing me with the opportunity to work on this project.
+
+I would also like to thank Dr. Wladislav Krinitsin for general guidance and discussions, Dr. Jonas Rigo for helping me understand the NQS model, and all of the team for welcoming me to the group.
 
 Abdullah Umut Hamzaoğulları, September 2024
 

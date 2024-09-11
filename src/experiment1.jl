@@ -3,6 +3,12 @@ include("plot_from_json.jl")
 name = "newjson"
 version = 1
 
+L = 20
+J = -1
+g = -1.0
+t = 0.1
+
+
 # experiment1 = experiment(L, J, g, 0.1, (2^x for x=5:6))
 # experiment1(name, version)
 

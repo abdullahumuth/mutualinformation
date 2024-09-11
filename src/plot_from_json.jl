@@ -137,23 +137,23 @@ end
 # 
 # custom_plot(configdict)
 
-path = 
+# path = 
+# 
+# x =
+# 
+# y1 = 
+# 
+# y2 = 
+# 
+# other_vars =
+# 
+# log_scale =
 
-x =
-
-y1 = 
-
-y2 = 
-
-other_vars =
-
-log_scale =
-
-configdict = Dict("path" => "merged_discrete_noise_results_all_with_no_noise", "x" => "num_samples", "y" => ["entropy","conditional_entropy"], "other_vars" => [], "log_scale" => "y")
-custom_plot(configdict)
-
-config2 = Dict("path" => "merged_discrete_noise_results_all_with_no_noise", "x" => "num_samples", "y" => ["mutual_information"], "other_vars" => [], "log_scale" => "y")
-custom_plot(config2)
-
-config2 = Dict("path" => "merged_discrete_noise_results_all_with_no_noise", "x" => "num_samples", "y" => ["conditional_entropy"], "other_vars" => [], "log_scale" => "y")
-custom_plot(config2)
+# configdict = Dict("path" => "merged_discrete_noise_results_all_with_no_noise", "x" => "num_samples", "y" => ["entropy","conditional_entropy"], "other_vars" => [], "log_scale" => "y")
+# custom_plot(configdict)
+# 
+# config2 = Dict("path" => "merged_discrete_noise_results_all_with_no_noise", "x" => "num_samples", "y" => ["mutual_information"], "other_vars" => [], "log_scale" => "y")
+# custom_plot(config2)
+# 
+# config2 = Dict("path" => "merged_discrete_noise_results_all_with_no_noise", "x" => "num_samples", "y" => ["conditional_entropy"], "other_vars" => [], "log_scale" => "y")
+# custom_plot(config2)

@@ -152,8 +152,8 @@ end
 
 # Example usage
 # merge_json_files("data/outputs/noise0.1_discrete_sample_v1/results/result.json", "data/outputs/noise0.01_discrete_sample_v1/results/result.json", "merged_results")
-merge_json_files("data/outputs/merged_discrete_noise_results_all/results/result.json", "data/outputs/_old/ER_improved_sample_convergence_l20_batch128_v1/results/result.json", "merged_discrete_noise_results_all_with_no_noise_v2")
-merge_json_files("data/outputs/merged_discrete_noise_results_all_with_no_noise_v2/results/result.json", "data/outputs/noiseless_L12_discrete_sample_v1/results/result.json", "merged_discrete_noise_results_all_with_no_noise_l12")
+# merge_json_files("data/outputs/merged_discrete_noise_results_all/results/result.json", "data/outputs/_old/ER_improved_sample_convergence_l20_batch128_v1/results/result.json", "merged_discrete_noise_results_all_with_no_noise_v2")
+# merge_json_files("data/outputs/merged_discrete_noise_results_all_with_no_noise_v2/results/result.json", "data/outputs/noiseless_L12_discrete_sample_v1/results/result.json", "merged_discrete_noise_results_all_with_no_noise_l12")
 
 # Usage example:
 # csv_to_json_converter("path/to/your/csv/folder")

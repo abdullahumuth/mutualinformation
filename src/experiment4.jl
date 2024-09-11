@@ -1,6 +1,11 @@
 include("./main.jl")
 include("plot_from_json.jl")
 
+L = 20
+J = -1
+g = -1.0
+t = 0.1
+
 # generation_experiment("production_generation", 2, 1, 20, 2^16; discrete=false, get_data_from = "", conditional = true)
 
 #generation_experiment("continuous_production_generation", 1, 2, 2, L, 2^16; seed=120, discrete=false, get_data_from = "", conditional = true)

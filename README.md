@@ -59,7 +59,9 @@ So, the entropy and conditional entropy are just negative log-likelihoods of the
 One thing to note is that in the second equation, the entropy of the continuous distribution is calculated using the differential entropy formula, which is the continuous analog of the discrete entropy formula:
 
 $$H( \Psi) = - \int \rho( \Psi) \log \rho( \Psi) d \Psi$$
+
 and 
+
 $$H( \Psi|S) = - \int \sum_{i}\rho( \Psi,S) \log \rho( \Psi|S) d\Psi$$
 
 <br/> 
@@ -137,23 +139,72 @@ To run a simple experiment, use the following function:
 
 ```julia
 simple_experiment(
-    "experiment_name", 
+    experiment_name, 
     version_number, 
-    OrderedDict(:L => [20], :J => [-1], :g => [-1.0], :t => [0.1]), 
-    exp_modes_params=OrderedDict(:uniform => [false], :fake => [false]), 
-    hyper_parameters=OrderedDict(:gaussian_num => [32])
-)
+    data_gen_params; 
+    exp_modes_params, 
+    hyper_parameters)
 ```
+
+where the `data_gen_params`, `exp_modes_params`, `hyper_parameters` are dictionaries whose keys are parameter names (as symbols in Julia) and the values are any iterable set of values for the experiment to go over. 
 
 This function call will:
 - Create necessary directories.
-- Run the experiment with different configurations of the parameters (`L`, `J`, `g`, and `t`).
+- Run the experiment with different configurations of the parameters (as their cartesian product)
 - Save models, plots, and results in the `data/outputs/experiment_name` folder.
 
-### File Descriptions:
-- **`main.jl`**: The main script containing the logic for data generation, training, and evaluation.
-- **`transformer.jl`**: Defines the transformer architecture used in the experiments.
-- **`read_wvfct.jl`**: Contains functions to read or generate wave functions for quantum systems.
+
+Inside the loop of parameters, input is created through `create_dataset` function, which takes `data_gen_param_dict` and `exp_modes_param_dict` as arguments, which are NamedTuples, and can be used to pass the parameters with the ... operator.
+
+```julia
+input = create_dataset(data_gen_param_dict...; exp_modes_param_dict...)
+```
+
+The `create_dataset` function returns a tuple, and then is used to calculate the mutual information by:
+    
+```julia
+entropy, conditional_entropy = mutualinformation(input...; hyper_param_dict...)
+```
+
+Where `hyper_param_dict` is a NamedTuple that contains the hyperparameters of the model.
+
+Then, with the entropy and conditional entropy known, the models, loss csv and plots, and the results are saved with:
+
+```julia
+save_results(entropy, conditional_entropy, name, data_gen_param_dict, exp_modes_param_dict, hyper_param_dict)
+```
+
+Where `name` is the name of the experiment that will be used to create the folder structure in the `data/outputs` folder.
+
+
+
+It's very easy with this setup to adapt this code to different methods to calculate the mutual information, or to different data generation methods.
+
+#### Example:
+    
+
+A complete example of running an experiment from `experiment3.jl` is below:
+
+ ```julia
+include("./main.jl")
+include("plot_from_json.jl")
+name = "learning_rate_tests"
+version = 1
+
+L = [20, 12]
+J = -1
+g = -1.0
+t = 0.1
+
+data_gen_params = OrderedDict(:L => L, :J => J, :g => g, :t => 0.1:0.1:0.9, :num_samples=>(2^x for x=5:16))
+exp_mode = OrderedDict()
+hyper_params = OrderedDict(:gaussian_num => [0,32], :learning_rate => (10.0^x for x=-5:-1))
+
+simple_experiment(name, version, data_gen_params; exp_modes_params = exp_mode, hyper_parameters = hyper_params)
+
+ ```
+
+#### Parameters
 
 
 

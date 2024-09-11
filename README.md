@@ -177,9 +177,6 @@ save_results(entropy, conditional_entropy, name, data_gen_param_dict, exp_modes_
 Where `name` is the name of the experiment that will be used to create the folder structure in the `data/outputs` folder.
 
 
-
-It's very easy with this setup to adapt this code to different methods to calculate the mutual information, or to different data generation methods.
-
 #### Example:
     
 
@@ -197,16 +194,35 @@ g = -1.0
 t = 0.1
 
 data_gen_params = OrderedDict(:L => L, :J => J, :g => g, :t => 0.1:0.1:0.9, :num_samples=>(2^x for x=5:16))
-exp_mode = OrderedDict()
+exp_mode = OrderedDict(:noise => 0.001)
 hyper_params = OrderedDict(:gaussian_num => [0,32], :learning_rate => (10.0^x for x=-5:-1))
 
 simple_experiment(name, version, data_gen_params; exp_modes_params = exp_mode, hyper_parameters = hyper_params)
 
  ```
 
-#### Parameters
+#### Parameter dictionary keys:
 
+Below is a summary of the supported keys for the dictionaries that will go inside the simple_experiment function. 
 
+noise=0, load = "", discrete=true, uniform = false, unique = false, fake = false, shuffle=false
+
+- `data_gen_params`: From the transverse field Ising model, the parameters that will  are `L`, `J`, `g`, `t`, and `num_samples`.
+- `exp_modes_params`: The parameters that was used to try out different modes of the experiment. The keys are listed below:
+
+    - `noise=0`: The noise level that will be added to the wave function coefficients.
+
+    - `load=''`: A special loading mode that will load the data from the sampled data in the `data/inputs` folder.
+
+    - `uniform=false`: The boolean which determines whether to sample the spin states uniformly, regardless of the wave function coefficients.
+
+    - `unique=false`: The boolean which determines whether to sample the spin states uniquely, regardless of the wave function coefficients. (Requires `uniform=true`)
+
+    - `fake=false`: The boolean which determines whether to use an artificial mapping between the spin configurations and the wave function coefficients. 
+
+    - `shuffle=false`: If the fake data is to be shuffled or not.
+
+It should be noted that it's very easy with this setup to adapt this code to different methods to calculate the mutual information, or to different data generation methods. by changing the `create_dataset` and `mutualinformation` functions, and the `save_results` function.
 
 
 

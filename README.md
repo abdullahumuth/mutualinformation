@@ -59,7 +59,9 @@ So, the entropy and conditional entropy are just negative log-likelihoods of the
 One thing to note is that in the second equation, the entropy of the continuous distribution is calculated using the differential entropy formula, which is the continuous analog of the discrete entropy formula:
 
 $$H( \Psi) = - \int \rho( \Psi) \log \rho( \Psi) d \Psi$$
+
 and 
+
 $$H( \Psi|S) = - \int \sum_{i}\rho( \Psi,S) \log \rho( \Psi|S) d\Psi$$
 
 <br/> 

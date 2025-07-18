@@ -149,8 +149,10 @@ end
 # 
 # log_scale =
 
-# configdict = Dict("path" => "merged_discrete_noise_results_all_with_no_noise", "x" => "num_samples", "y" => ["entropy","conditional_entropy"], "other_vars" => [], "log_scale" => "y")
-# custom_plot(configdict)
+configdict4 = Dict("path" => "discretely_generated_continuous_prediction_v1", "x" => "num_samples", "y" => ["entropy", "conditional_entropy"], "other_vars" => [], "log_scale" => "y")
+custom_plot(configdict4)
+
+
 # 
 # config2 = Dict("path" => "merged_discrete_noise_results_all_with_no_noise", "x" => "num_samples", "y" => ["mutual_information"], "other_vars" => [], "log_scale" => "y")
 # custom_plot(config2)

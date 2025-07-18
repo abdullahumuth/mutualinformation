@@ -187,7 +187,7 @@ end
 
 
 #conditional probability
-function (m::GeneralTransformer)(x, y; discrete = true, find_probs = false)
+function (m::GeneralTransformer)(x, y; discrete = true, find_probs = false, return_log_prob= false)
     # if find_probs is true, we will calculate the conditional probability of x given y
     
     padded_x = pad_constant(x, (0,0,1,0,0,0), padding_constant)
@@ -195,13 +195,14 @@ function (m::GeneralTransformer)(x, y; discrete = true, find_probs = false)
     h = cross_attend(m, padded_x, encoded)
     h = m.final_dense(h)
     h = h[:,1:end-1,:]
+    func = return_log_prob ? x -> log2(exp(1)).* x : exp
     if find_probs
         if discrete
             # calculate the conditional probability
             # so normally we would multiply the softmaxed weights, depending on x (which coefficient of the softmax we want to use)
             # softmax, log, sum, exp is needed. but i want to make it more stable with already written functions.
             # logitcrossentropy mostly works but we need to define agg to be able to use it.
-            h = Flux.logitcrossentropy(h, x, agg = (x->exp.(-sum(x, dims=2))))
+            h = Flux.logitcrossentropy(h, x, agg = (x->func.(-sum(x, dims=2))))
         else
             throw(ArgumentError("find_probs is not implemented for gaussian mixtures"))
         end

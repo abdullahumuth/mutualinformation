@@ -2,6 +2,55 @@ include("./theoretical_entropy.jl")
 using Plots
 using BSON
 using Distributions
+using StatsBase
+
+# Helper function to display and save plots
+function display_and_save(plot_obj, filename="plot.png")
+    try
+        display(plot_obj)
+    catch e
+        println("Display failed: $e")
+    end
+    
+    try
+        savefig(plot_obj, filename)
+        println("Plot saved as '$filename'")
+    catch e
+        println("Save failed: $e")
+    end
+end
+
+# Test different plotting backends
+function test_plotting_backends()
+    println("Testing plotting backends...")
+    
+    # Test simple plot
+    x = 1:10
+    y = x.^2
+    
+    # Try GR backend (default)
+    try
+        gr()
+        p = plot(x, y, title="Test Plot - GR Backend")
+        display_and_save(p, "test_gr.png")
+        println("✓ GR backend works")
+    catch e
+        println("✗ GR backend failed: $e")
+    end
+    
+    # Try PlotlyJS backend
+    try
+        plotlyjs()
+        p = plot(x, y, title="Test Plot - PlotlyJS Backend")
+        display_and_save(p, "test_plotlyjs.html")
+        println("✓ PlotlyJS backend works")
+    catch e
+        println("✗ PlotlyJS backend failed: $e")
+    end
+    
+    # Reset to GR
+    gr()
+end
 
 function GaussianPDFTest()
     a = MixtureGaussianPDF([0.5, 0.5],[0.0, 3.0],[1.0, 0.5])
@@ -154,16 +203,14 @@ function test_sample_joint_distribution()
     # Parameters for sampling
     b_dims = 2  # assuming binary sequences
     seq_len = 20
-    n_a_samples = 100    # number of unique a values
-    samples_per_a = 100  # number of b samples per a value
+    n_samples = 10000 
     
     # Sample from joint distribution
-    a_unique, a_full, b_samples = sample_joint_distribution(
-        model, p_a, b_dims, seq_len, n_a_samples, samples_per_a
+    a_samples, b_samples = sample_joint_distribution(
+        model, p_a, b_dims, seq_len, n_samples
     )
     
     # Print basic information
-    println("Number of unique a values: $(length(a_unique))")
     println("Total number of samples: $(size(b_samples, 2))")
     println("Sequence length: $(size(b_samples, 1))")
     
@@ -171,7 +218,7 @@ function test_sample_joint_distribution()
     p = plot(layout=(2,1), size=(800, 800))
     
     # Plot 1: Distribution of a values
-    histogram!(p[1], a_unique, 
+    histogram!(p[1], a_samples, 
               bins=50, 
               normalize=true, 
               alpha=0.6,
@@ -179,7 +226,7 @@ function test_sample_joint_distribution()
               title="Distribution of a values")
     
     # Add the true p(a) curve
-    x_range = range(minimum(a_unique)-0.5, maximum(a_unique)+0.5, length=200)
+    x_range = range(minimum(a_samples)-0.5, maximum(a_samples)+0.5, length=200)
     plot!(p[1], x_range, p_a.(x_range), 
           label="True p(a)", 
           linewidth=2)
@@ -202,7 +249,7 @@ function test_sample_joint_distribution()
     display(p)
     
     # Return samples for further analysis if needed
-    return a_unique, a_full, b_samples
+    return a_samples, b_samples
 end
 
 function test_calculate_entropy_b()
@@ -216,6 +263,9 @@ function test_calculate_entropy_b()
     # Test parameters
     input_dims = [2]  # Test with binary and ternary sequences
     seq_lengths = [5, 10, 20]  # Test with different sequence lengths
+
+    a_range  = (-10, 10)
+    n_a_points = 200
     
     # Store results for comparison
     results = Dict{Tuple{Int,Int,String},Any}()
@@ -230,7 +280,7 @@ function test_calculate_entropy_b()
             if total_sequences <= 10000
                 # Test exact calculation
                 println("Running exact entropy calculation...")
-                @time exact_result = exact_entropy(model, p_a, seq_len, input_dim)
+                @time exact_result = exact_entropy(model, p_a, seq_len, input_dim, a_range, n_a_points)
                 results[(input_dim, seq_len, "exact")] = exact_result
                 println("Exact entropy: $exact_result bits")
                 
@@ -238,8 +288,7 @@ function test_calculate_entropy_b()
                 for n_samples in [1000, 5000, 10000]
                     println("Running Monte Carlo with $n_samples samples...")
                     @time mc_result, confidence = monte_carlo_entropy(
-                        model, p_a, n_samples, seq_len, input_dim, show_progress=false
-                    )
+                        model, p_a, n_samples, seq_len, input_dim, a_range, n_a_points; show_progress=false)
                     results[(input_dim, seq_len, "monte_carlo_$n_samples")] = (mc_result, confidence)
                     println("Monte Carlo entropy: $mc_result ± $confidence bits")
                     
@@ -263,8 +312,7 @@ function test_calculate_entropy_b()
                 for n_samples in [1000, 5000, 10000, 20000]
                     println("Running Monte Carlo with $n_samples samples...")
                     @time mc_result, confidence = monte_carlo_entropy(
-                        model, p_a, n_samples, seq_len, input_dim, show_progress=false
-                    )
+                        model, p_a, n_samples, seq_len, input_dim, a_range, n_a_points; show_progress=false)
                     results[(input_dim, seq_len, "monte_carlo_$n_samples")] = (mc_result, confidence)
                     println("Monte Carlo entropy: $mc_result ± $confidence bits")
                     
@@ -344,7 +392,7 @@ function test_calculate_entropy_b()
     end
     
     # Test additional helpful utilities
-    test_joint_distribution_consistency(model, p_a)
+    #test_joint_distribution_consistency(model, p_a)
     
     return results
 end
@@ -355,13 +403,12 @@ Test consistency between entropy and joint sampling
 function test_joint_distribution_consistency(model, p_a; 
                                             input_dim=2, 
                                             seq_len=10, 
-                                            n_a_samples=100,
-                                            samples_per_a=100)
+                                            n_samples=10000)
     println("\n=== Testing Consistency Between Entropy and Joint Sampling ===")
     
     # Sample from joint distribution
-    a_unique, a_full, b_samples = sample_joint_distribution(
-        model, p_a, input_dim, seq_len, n_a_samples, samples_per_a
+    a_samples, b_samples = sample_joint_distribution(
+        model, p_a, input_dim, seq_len, n_samples
     )
     
     # Compute empirical entropy from samples
@@ -385,12 +432,11 @@ function test_joint_distribution_consistency(model, p_a;
     end
     
     println("Empirical entropy from samples: $empirical_entropy bits")
-    
+    n_a_samples = 200
     # Calculate Monte Carlo entropy for comparison
     println("Calculating Monte Carlo entropy...")
     mc_entropy, confidence = monte_carlo_entropy(
-        model, p_a, 5000, seq_len, input_dim, show_progress=false
-    )
+        model, p_a, 5000, seq_len, input_dim, a_range, n_a_samples; show_progress=false)
     
     println("Monte Carlo entropy: $mc_entropy ± $confidence bits")
     
@@ -401,7 +447,7 @@ function test_joint_distribution_consistency(model, p_a;
     diff = abs(empirical_entropy - mc_entropy)
     println("Difference: $diff bits")
 
-    expected_diff = abs(empirical_entropy+expected_bias - mc_entropy)
+    expected_diff = abs(empirical_entropy-expected_bias - mc_entropy)
     println("Expected difference: $expected_diff bits")
 
 
@@ -439,13 +485,13 @@ function plot_entropy_scaling(model, p_a;
         
         # For small spaces, use exact calculation
         if input_dim^seq_len <= 10000
-            entropy = exact_entropy(model, p_a, seq_len, input_dim, show_progress=false)
+            entropy = exact_entropy(model, p_a, seq_len, input_dim, a_range, n_a_points; show_progress=false)
             push!(entropies, entropy)
             push!(confidences, 0.0)
         else
             # For larger spaces, use Monte Carlo
             entropy, confidence = monte_carlo_entropy(
-                model, p_a, n_samples, seq_len, input_dim, show_progress=false
+                model, p_a, n_samples, seq_len, input_dim, a_range, n_a_points; show_progress=false
             )
             push!(entropies, entropy)
             push!(confidences, confidence)
@@ -477,5 +523,82 @@ function plot_entropy_scaling(model, p_a;
     return seq_lengths, entropies, confidences
 end
 
+
 # Run the test
-print(test_calculate_entropy_b())
+#test_calculate_p_b()
+#print(test_calculate_entropy_b())
+#test_sample_joint_distribution()
+
+# Below is code to initialize the model and p(a) for the debug_entropy_discrepancy.
+model_path = "data/inputs/production_generation/models/generated_production_generation.bson"
+model = BSON.load(model_path)[:model] |> gpu
+p_a = MixtureGaussianPDF([0.5, 0.5], [-0.2, 0.2], [0.1, 0.1])
+
+# Run the debugging analysis
+# Run the visualization
+
+function check_specific_sequences(model, p_a; n_samples=100000)
+    println("=== Checking Specific Sequence Probabilities ===")
+    
+    a_val = 0.0
+    a_batch = reshape(fill(a_val, n_samples), 1, 1, :) |> gpu
+    
+    # Generate samples
+    samples = generate_samples(model, 2, 5, n_samples, a_batch) |> cpu
+    
+    # Count specific sequences
+    sequence_counts = Dict{String, Int}()
+    
+    for i in 1:n_samples
+        # Convert one-hot to sequence string
+        seq = [samples[1, j, i] == 1 ? 1 : 2 for j in 1:5]
+        seq_str = join(seq)
+        sequence_counts[seq_str] = get(sequence_counts, seq_str, 0) + 1
+    end
+    
+    # Compare with true probabilities for some key sequences
+    test_sequences = ["21111", "11222", "22222", "12212", "21212"]
+    
+    println("Sequence | Empirical | True p(b|a) | Ratio")
+    println("---------|-----------|-------------|-------")
+    
+    for seq_str in test_sequences
+        seq = [parse(Int, c) for c in seq_str]
+        
+        # Get true probability
+        seq_onehot = Int.(reshape(Flux.onehotbatch(seq, 1:2), (2, 5, 1))) |> gpu
+        a_tensor = reshape([a_val], 1, 1, 1) |> gpu
+        true_prob = calculate_p_b_given_a(model, seq_onehot, a_tensor)[1]
+        
+        # Get empirical probability
+        count = get(sequence_counts, seq_str, 0)
+        emp_prob = count / n_samples
+        
+        ratio = emp_prob / true_prob
+        println("$seq_str  | $(round(emp_prob, digits=5)) | $(round(true_prob, digits=5)) | $(round(ratio, digits=3))")
+    end
+    
+    # Calculate total variation distance for this specific a
+    total_var = 0.0
+    all_seqs = Set(keys(sequence_counts))
+    
+    # Add any sequences that should exist but weren't sampled
+    for idx in 0:31
+        seq = [((idx >> i) & 1) + 1 for i in 0:4]
+        all_seqs = union(all_seqs, [join(seq)])
+    end
+    
+    for seq_str in all_seqs
+        seq = [parse(Int, c) for c in seq_str]
+        seq_onehot = Int.(reshape(Flux.onehotbatch(seq, 1:2), (2, 5, 1))) |> gpu
+        a_tensor = reshape([a_val], 1, 1, 1) |> gpu
+        true_prob = calculate_p_b_given_a(model, seq_onehot, a_tensor)[1]
+        
+        emp_prob = get(sequence_counts, seq_str, 0) / n_samples
+        total_var += abs(emp_prob - true_prob)
+    end
+    
+    println("\nTotal variation distance for a=$a_val: $(total_var/2)")
+end
+
+check_specific_sequences(model, p_a; n_samples=100000)
